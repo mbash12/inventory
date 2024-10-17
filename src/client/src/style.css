@@ -1,0 +1,85 @@
+*.border-b:focus {
+    outline: none !important;
+    box-shadow: none;
+}
+* {
+    font-family: "Roboto", sans-serif;
+    -webkit-tap-highlight-color:transparent 
+}
+
+.transition {
+    transition-duration: 0.3s !important;
+    transition-timing-function: linear;
+}
+input{
+    color: #000;
+}
+input.border-b:focus, select.border-b:focus{
+    border-bottom-color: blue;
+}
+input[type="checkbox"] {
+    -webkit-appearance: none;
+
+    appearance: none;
+    background-color: var(--form-background);
+    margin: 0;
+
+    font: inherit;
+    color: #ddd;
+    width: 18px;
+    height: 18px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    transform: translateY(-4px);
+    display: grid;
+    place-content: center;
+    transition: all 200ms ease-in-out;
+    position: relative;
+    top: 4px;
+}
+input[type="checkbox"]:checked {
+    background: red;
+    border: 0.15em solid red;
+    border-radius: 4px;
+}
+
+input[type="checkbox"]::before {
+    content: "";
+    width: 0.65em;
+    height: 0.65em;
+    clip-path: polygon(
+        14% 44%,
+        0 65%,
+        50% 100%,
+        100% 16%,
+        80% 0%,
+        43% 62%
+    );
+    transform: scale(0);
+    transform-origin: bottom left;
+    transition: 120ms transform ease-in-out;
+    background-color: white;
+}
+
+
+input[type="checkbox"]:checked::before {
+    transform: scale(1);
+}
+
+input[type="checkbox"]:focus {
+    outline: max(2px, 0.15em) solid currentColor;
+    outline-offset: max(2px, 0.15em);
+}
+
+input[type="checkbox"]:disabled {
+    --form-control-color: var(--form-control-disabled);
+
+    color: var(--form-control-disabled);
+    cursor: not-allowed;
+}
+.scrollbar-hide {
+    scrollbar-width: none;
+}
+.scrollbar-hide::-webkit-scrollbar {
+    display: none;
+}

@@ -1,0 +1,17 @@
+version: '3'
+services:
+    php:
+        image: php:8.2.4-zts-alpine
+        ports:
+            - "8016:80"   
+        tty: true
+        volumes:
+            - ./:/app
+        command: "sh /app/deploy.sh"
+networks:
+    default:
+        driver: bridge
+        ipam:
+          config:
+            - subnet: 172.16.19.0/24
+
