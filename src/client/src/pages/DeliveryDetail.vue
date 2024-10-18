@@ -7,7 +7,13 @@ import BottomsheetDate from "../components/BottomsheetDate.vue";
 import BottomsheetItem from "../components/BottomsheetItem.vue";
 import ItemModal from "../components/ItemModal.vue";
 import { loading } from "../services/router";
-import { getDelivery, updateDelivery, nom,ASSETSURL } from "../services/service";
+import {
+    getDelivery,
+    updateDelivery,
+    nom,
+    ASSETSURL,
+    upload
+} from "../services/service";
 import { useRoute, useRouter } from "vue-router";
 import BulkDelivery from "../components/BulkDelivery.vue";
 const alertShowError = ref(false);
@@ -15,13 +21,14 @@ const alertShowSuccess = ref(false);
 const route = useRoute();
 const router = useRouter();
 const state = reactive({
-    project_id:null,
+    project_id: null,
     id: null,
     data: null,
     selected: null,
     bulkadd: false,
     bulkdata: null,
-    viewFile:null
+    viewFile: null,
+    receipt_files: [],
 });
 const editMode = ref(false);
 const handleEditMode = () => {
@@ -29,17 +36,20 @@ const handleEditMode = () => {
 };
 const handleAdd = (data) => {
     state.bulkadd = false;
-    data.forEach(el => {
-        let index = state.data.delivery_items_data.findIndex(e => e.id == el.id)
-        if(el.qty && el.qty > 0){
+    data.forEach((el) => {
+        let index = state.data.delivery_items_data.findIndex(
+            (e) => e.id == el.id
+        );
+        if (el.qty && el.qty > 0) {
             state.data.delivery_items_data[index].actual_quantity = el.qty;
             state.data.delivery_items_data[index].delivered_at = new Date();
-        }else{
-            state.data.delivery_items_data[index].actual_quantity = state.data.delivery_items_data[index].quantity;
+        } else {
+            state.data.delivery_items_data[index].actual_quantity =
+                state.data.delivery_items_data[index].quantity;
             state.data.delivery_items_data[index].delivered_at = null;
         }
     });
-}
+};
 const selectedEdit = ref(null);
 const handleDateChange = (i) => {
     state.data.delivery_date = i;
@@ -57,17 +67,43 @@ const handleDeliverItem = () => {
     state.selected = null;
 };
 
+const removeFile = (i) => {
+    state.receipt_files.splice(i, 1)
+}
+
+const uploadFile = (e) => {
+    
+    const file = e.target.files[0];
+    if (file.size > 4 * 1024 * 1024) {
+        alertShowError.value = "File size must be less than 4MB";
+        return;
+    }
+
+    const types = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
+    if (!types.includes(file.type)) {
+        alertShowError.value = "Only image and document files are allowed";
+        return;
+    }
+    loading();
+    upload(file).then((r) => {
+        state.receipt_files = [...state.receipt_files, r.path]
+        loading(false);
+    });
+}
 onMounted(() => {
     loading();
     state.id = route.params.id;
     getDelivery(state.id).then((r) => {
         if (r.code === 200) {
             state.data = r.data;
-            state.data.do_files = JSON.parse(r.data.do_files ?? '[]');
-            if(state.data.do_file){
+            state.data.do_files = JSON.parse(r.data.do_files ?? "[]");
+            state.receipt_files = JSON.parse(r.data.receipt_files ?? "[]");
+            if (state.data.do_file) {
                 state.data.do_files.push(state.data.do_file);
             }
-            state.bulkdata = JSON.parse(JSON.stringify(r.data.delivery_items_data));
+            state.bulkdata = JSON.parse(
+                JSON.stringify(r.data.delivery_items_data)
+            );
         }
         loading(false);
     });
@@ -75,6 +111,7 @@ onMounted(() => {
 const submit = () => {
     let data = {
         ...state.data,
+        receipt_files: JSON.stringify(state.receipt_files),
         delivery_items: state.data.delivery_items_data,
     };
     loading();
@@ -93,9 +130,7 @@ const submit = () => {
         @submit.prevent="submit"
         class="flex flex-col h-full text-black min-h-0"
     >
-        <Navbar
-            title="Delivery Detail"
-        ></Navbar>
+        <Navbar title="Delivery Detail"></Navbar>
         <a
             :href="`/#/details/${state.data?.project}`"
             target="_blank"
@@ -195,9 +230,61 @@ const submit = () => {
                             >Surat Jalan</span
                         >
                     </div>
-                    <div class="flex gap-2 overflow-x-auto px-4 py-2 border-b" v-if="state.data?.do_files?.length">
-                        <div class="flex items-center w-80px h-80px  flex-shrink-0 rounded border relative" v-for="(file, i) in state?.data?.do_files" @click="state.viewFile = file">
-                            <img :src="ASSETSURL + file" alt="" class="w-full h-full object-cover" >
+                    <div
+                        class="flex gap-2 overflow-x-auto px-4 py-2 border-b"
+                        v-if="state.data?.do_files?.length"
+                    >
+                        <div
+                            class="flex items-center w-80px h-80px flex-shrink-0 rounded border relative"
+                            v-for="(file, i) in state?.data?.do_files"
+                            @click="state.viewFile = file"
+                        >
+                            <img
+                                :src="ASSETSURL + file"
+                                alt=""
+                                class="w-full h-full object-cover"
+                            />
+                        </div>
+                    </div>
+
+                    <div
+                        class="flex justify-between px-4 py-3 items-center border-b"
+                    >
+                        <span class="text-xs text-blue-gray-600 font-semibold"
+                            >Foto Barang Diterima</span
+                        >
+                    </div>
+                    <div class="flex gap-2 overflow-auto w-full p-2 border-b">
+                        <div
+                            class="w-80px h-80px flex-shrink-0 relative border rounded flex flex-col items-center justify-center"
+                            v-if="state.data?.status !== 'delivered'"
+                        >
+                            <i class="ri-upload-line text-2xl"></i>
+                            <span class="text-xs text-blue-gray-400"
+                                >Upload</span
+                            >
+                            <input
+                                type="file"
+                                class="w-full h-full opacity-0 absolute inset-0"
+                                @input="uploadFile"
+                                accept="image/*"
+                            />
+                        </div>
+                        <div
+                            class="flex items-center w-80px h-80px flex-shrink-0 rounded border relative"
+                            v-for="(file, i) in state?.receipt_files"
+                            @click="state.viewFile = file"
+                        >
+                            <img
+                                :src="ASSETSURL + file"
+                                alt=""
+                                class="w-full h-full"
+                            />
+                            <i
+                                class="ri-close-circle-fill text-red-500 text-3xl absolute -top-2 w-28px h-28px block flex items-center justify-center -right-2"
+                                v-if="state.data?.status !== 'delivered'"
+                                @click.stop="removeFile(i)"
+                            ></i>
                         </div>
                     </div>
                     <div
@@ -250,9 +337,7 @@ const submit = () => {
                                 </span>
                             </div>
                         </button>
-                        <div
-                            class="p-4 w-full mb-4 flex gap-4"
-                        >
+                        <div class="p-4 w-full mb-4 flex gap-4">
                             <button
                                 type="button"
                                 class="flex p-2 gap-2 items-center justify-center bg-app-500 text-white w-full rounded"
@@ -339,10 +424,18 @@ const submit = () => {
         "
     ></Alert>
 
-    <div class="fixed bottom-0 left-0 right-0 top-0 z-60 bg-black/70 flex items-center justify-center" v-if="state.viewFile">
-        <img :src="ASSETSURL + state.viewFile" alt="" class="max-w-full max-h-full object-contain">
-        <i class="ri-close-circle-fill text-red-500 text-4xl absolute top-2 w-32px h-32px block flex items-center justify-center right-2 bg-white rounded-full"
-            @click="state.viewFile = null"></i>
-
+    <div
+        class="fixed bottom-0 left-0 right-0 top-0 z-60 bg-black/70 flex items-center justify-center"
+        v-if="state.viewFile"
+    >
+        <img
+            :src="ASSETSURL + state.viewFile"
+            alt=""
+            class="max-w-full max-h-full object-contain"
+        />
+        <i
+            class="ri-close-circle-fill text-red-500 text-4xl absolute top-2 w-32px h-32px block flex items-center justify-center right-2 bg-white rounded-full"
+            @click="state.viewFile = null"
+        ></i>
     </div>
 </template>

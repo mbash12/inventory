@@ -301,13 +301,13 @@ const submit = () => {
                                             <input
                                                 type="file"
                                                 class="w-full h-full opacity-0 absolute inset-0"
-                                                @change="uploadFile"
+                                                @input="uploadFile"
                                                 accept="image/*"
                                             />
                                         </div>
                                         <div class="flex items-center w-80px h-80px  flex-shrink-0 rounded border relative" v-for="(file, i) in state?.do_files" @click="state.viewFile = file">
                                             <img :src="ASSETSURL + file" alt="" class="w-full h-full" >
-                                            <i class="ri-close-circle-fill text-red-500 text-3xl absolute -top-2 w-28px h-28px block flex items-center justify-center -right-2" @click="removeFile(i)"></i>
+                                            <i class="ri-close-circle-fill text-red-500 text-3xl absolute -top-2 w-28px h-28px block flex items-center justify-center -right-2" @click.stop="removeFile(i)"></i>
                                         </div>
                                     </div>
                                 </div>

@@ -157,6 +157,7 @@ onMounted(() => {
             state.data = r.data;
             state.deliveries = r.dels.map((e) => {
                 e.do_files = JSON.parse(e.do_files ?? '[]');
+                e.receipt_files = JSON.parse(e.receipt_files ?? '[]');
                 if (e.do_file) {
                     e.do_files.push(e.do_file);
                 }
@@ -474,6 +475,12 @@ onMounted(() => {
                                     <span class="font-bold leading-4">File Surat Jalan</span>
                                 </div>
                             </th>
+                            <th class="p-1">
+                                <div
+                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full cursor-default group">
+                                    <span class="font-bold leading-4">File Barang Diterima</span>
+                                </div>
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="text-13px">
@@ -509,7 +516,7 @@ onMounted(() => {
                                 </div>
                             </td>
                             <td class="p-1">
-                                <div class="w-40">
+                                <div >
 
                                     <div class="flex gap-2 overflow-x-auto px-4 py-2 border-b"
                                         v-if="row?.do_files?.length">
@@ -520,16 +527,18 @@ onMounted(() => {
                                     </div>
 
                                 </div>
-                                <!-- <a :href="ASSETSURL+row.do_file"
-                                    target="_blank"
-                                    class="flex items-center justify-start p-1 whitespace-nowrap text-red-600"
-                                    v-if="row.do_file"
-                                >
-                                    Download
-                                </a>
-                                <span v-else class="flex items-center justify-start p-1 whitespace-nowrap">
-                                    No File
-                                </span> -->
+                            </td>
+                            <td class="p-1">
+                                <div >
+                                    <div class="flex gap-2 overflow-x-auto px-4 py-2 border-b"
+                                        v-if="row?.receipt_files?.length">
+                                        <div class="flex items-center w-60px h-60px  flex-shrink-0 rounded border relative"
+                                            v-for="(file, i) in row?.receipt_files" @click="state.viewFile = file">
+                                            <img :src="ASSETSURL + file" alt="" class="w-full h-full object-cover">
+                                        </div>
+                                    </div>
+
+                                </div>
                             </td>
                         </tr>
                     </tbody>

@@ -82,6 +82,7 @@ class DeliveryController extends Controller
                 "do_number" => $request->do_number,
                 // "do_file" => $request->do_file,
                 "do_files" => $request->do_files,
+                "receipt_files" => $request->receipt_files,
                 "status" => 'ready',
             ]);
             $productss = $delivery->delivery_items_data()->saveMany($delivery_items);
@@ -205,6 +206,7 @@ class DeliveryController extends Controller
                 "do_number" => $request->do_number,
                 "do_file" => $request->do_file,
                 "do_files" => $request->do_files,
+                "receipt_files" => $request->receipt_files,
                 "status" => $del_status
             ]);
 

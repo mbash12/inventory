@@ -24,6 +24,7 @@ class Delivery extends Model
         'do_number',
         'do_file',
         'do_files',
+        'receipt_files',
         'status',
     ];
 
