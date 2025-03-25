@@ -19,7 +19,7 @@ const state = reactive({
     invoice_pic: null,
     invoiced_amount: null,
     note: null,
-    alert_time: null,
+
     is_plan: true,
     inv_tab: 0,
 });
@@ -323,21 +323,7 @@ const emitAction = () => {
                         !(!state.is_plan && user.position === 'marketing')
                     "
                 >
-                    <span class="text-xs text-blue-gray-400"
-                        >Alert Settings*</span
-                    >
-                    <select
-                        class="w-full h-10 border-b bg-transparent text-sm text-black"
-                        v-model="state.alert_time"
-                        required
-                    >
-                        <option value="">Select Alert Setting</option>
-                        <template v-for="n in 30">
-                            <option :value="n - 1">
-                                {{ n - 1 }} days before
-                            </option>
-                        </template>
-                    </select>
+
                 </label>
                 <div class="flex w-full">
                     <label class="flex flex-col items-start relative w-full">

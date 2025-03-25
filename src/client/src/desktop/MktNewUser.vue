@@ -128,6 +128,7 @@ onMounted(() => {
                                 <option value="marketing">Marketing</option>
                                 <option value="delivery">Delivery</option>
                                 <option value="finance">Finance</option>
+                                <option value="design">Design</option>
                             </select>
                             <!-- <button
                                 class="h-45px w-55px flex items-center justify-center bg-red-500 text-white rounded-r-lg"

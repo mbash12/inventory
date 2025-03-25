@@ -194,7 +194,7 @@ const doLogin = async () => {
                     <div
                         class="w-full font-normal text-[14px] text-app-112 text-center"
                     >
-                        © 2023 | Pelangi Sentral Kreasi
+                        © 2025 | Pelangi Sentral Kreasi
                     </div>
                 </div>
             </div>

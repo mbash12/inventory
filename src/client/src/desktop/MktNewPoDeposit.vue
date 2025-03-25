@@ -1,6 +1,7 @@
 <script setup>
 import dayjs from "dayjs";
 import { onMounted, reactive, ref, watch } from "vue";
+import Swal from 'sweetalert2';
 import {
     getProject,
     createPodeposit,
@@ -12,11 +13,18 @@ import {
     goto,
 } from "../services/service";
 import Select1 from "../components/Select1.vue";
-
+import INumber from "../components/INumber.vue";
 import { useRoute, useRouter } from "vue-router";
 import { loading } from "../services/router";
 import Confirm from "../components/Confirm.vue";
 import Alert from "../components/Alert.vue";
+
+const props = defineProps({
+    layoutData: {
+        type: Object,
+    },
+});
+
 const user = currentUser.user?.user;
 
 const confirmDelete = ref(false);
@@ -45,6 +53,12 @@ const state = reactive({
     products_group: [],
     selectedGroup: null,
     po_deposits: [],
+    current_po: 0,
+    documents: {
+        do: false,
+        bast: false,
+        gr: false,
+    }
 });
 
 const deleteSelectedProduct = () => {
@@ -72,24 +86,36 @@ const deleteSelectedGroup = () => {
         state.products_group.splice(state.selectedGroup[1], 1);
     }
     state.products_group = state.products_group.map((g) => {
-    g.products = g.products.map((p) => {
-        p.total_price = p.price != null && p.quantity != null ? p.price * p.quantity : null;
-        return p;
+        g.products = g.products.map((p) => {
+            p.total_price =
+                p.price != null && p.quantity != null
+                    ? p.price * p.quantity
+                    : null;
+            return p;
+        });
+        g.total_price = g.products.reduce(
+            (e, c) => e + (c.total_price || 0),
+            0
+        );
+        return g;
     });
-    g.total_price = g.products.reduce((e, c) => e + (c.total_price || 0), 0);
-    return g;
-});
 
-state.po_deposits = state.po_deposits.map((g) => {
-    g.products = g.products.map((p) => {
-        p.total_price = p.price != null && p.quantity != null ? p.price * p.quantity : null;
-        return p;
+    state.po_deposits = state.po_deposits.map((g) => {
+        g.products = g.products.map((p) => {
+            p.total_price =
+                p.price != null && p.quantity != null
+                    ? p.price * p.quantity
+                    : null;
+            return p;
+        });
+        g.total_price = g.products.reduce(
+            (e, c) => e + (c.total_price || 0),
+            0
+        );
+        return g;
     });
-    g.total_price = g.products.reduce((e, c) => e + (c.total_price || 0), 0);
-    return g;
-});
-        
-        state.balance = state.budget - state.expense ?? 0;
+
+    state.balance = state.budget - state.expense ?? 0;
     state.expense = state.products_group.reduce(
         (e, c) => e + (c.total_price || 0),
         0
@@ -99,6 +125,8 @@ state.po_deposits = state.po_deposits.map((g) => {
         0
     );
     state.balance = state.budget - state.expense ?? 0;
+
+    state.current_po = state.po_deposits.length - 1;
 
     confirmDeleteGroup.value = false;
 };
@@ -112,6 +140,18 @@ const setDelete = (type, i, ii) => {
 };
 const submit = () => {
     loading();
+    const actual = state.products_group.map((g) => {
+        return {
+            ...g,
+            documents: state.documents
+        };
+    })
+    const nonactual = state.po_deposits.map((g) => {
+        return {
+            ...g,
+            documents: state.documents
+        };
+    })
     let data = {
         job_number: state.job_number,
         client_po_date: state.client_po_date,
@@ -124,9 +164,12 @@ const submit = () => {
         budget: state.budget ?? 0,
         expense: state.expense ?? 0,
         balance: state.balance ?? 0,
-        products_group: state.products_group,
-        po_deposits: state.po_deposits,
+        products_group: actual,
+        po_deposits: nonactual,
+        is_po_deposit: true,
+        documents: state.documents
     };
+    // console.log(data);
     if (state.id === null) {
         createPodeposit(data).then((r) => {
             loading(false);
@@ -157,7 +200,7 @@ const init = () => {
         }
     });
     state.pic_name = currentUser.user.user.name;
-    addNewDeposit();
+    addNewDeposit(true);
     // addNewGroup();
     if (currentUrl.includes("edit")) {
         let id = currentUrl.split("/").slice(-1);
@@ -269,7 +312,64 @@ const addNewGroup = (po_number) => {
         return g;
     });
 };
-const addNewDeposit = () => {
+
+const validateProducts = (products) => {
+    return products.every(p => 
+        p.name && 
+        p.quantity && 
+        p.price && 
+        p.description
+    );
+};
+
+const switchPO = (e) => {
+    const current = state.po_deposits[state.current_po];
+    // Validate current PO fields
+    if (!current.client_po_number || !current.client_pic_name || !current.client_po_date) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Warning',
+            text: 'Please fill all required fields (PO Number, PIC, PO Date)'
+        });
+        return;
+    }
+    // Validate products
+    if (!validateProducts(current.products)) {
+        Swal.fire({
+            icon: 'warning',
+            title: 'Warning',
+            text: 'Please fill all required product fields'
+        });
+        return;
+    }
+    const value = parseInt(e.target.value);
+    if (!isNaN(value)) {
+        state.current_po = value;
+    }
+};
+
+const addNewDeposit = (force = false) => {
+    if (!force) {
+        const current = state.po_deposits[state.current_po];
+        // Validate current PO fields
+        if (!current.client_po_number || !current.client_pic_name || !current.client_po_date) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Warning',
+                text: 'Please fill all required fields (PO Number, PIC, PO Date)'
+            });
+            return;
+        }
+        // Validate products
+        if (!validateProducts(current.products)) {
+            Swal.fire({
+                icon: 'warning',
+                title: 'Warning',
+                text: 'Please fill all required product fields'
+            });
+            return;
+        }
+    }
     state.po_deposits.push({
         title: null,
         job_number: null,
@@ -294,6 +394,8 @@ const addNewDeposit = () => {
             state.job_number + "-CD" + (i + 1).toString().padStart(3, "0");
         return g;
     });
+
+    state.current_po = state.po_deposits.length - 1;
 };
 // vue watch state.products_group
 watch(
@@ -328,15 +430,22 @@ watch(
         if (group.length) {
             group.forEach((g) => {
                 g.products.forEach((p) => {
-                    p.total_price = (p.price != null && p.quantity != null) ? p.price * p.quantity : null;
+                    p.total_price =
+                        p.price != null && p.quantity != null
+                            ? p.price * p.quantity
+                            : null;
                 });
-                g.total_price = g.products
-                    .reduce((acc, e) => acc + (e.total_price || 0), 0);
+                g.total_price = g.products.reduce(
+                    (acc, e) => acc + (e.total_price || 0),
+                    0
+                );
             });
             state.client_po_number = group[0].client_po_number;
             state.client_po_date = group[0].client_po_date;
-            state.budget = group
-                .reduce((acc, e) => acc + (e.total_price || 0), 0);
+            state.budget = group.reduce(
+                (acc, e) => acc + (e.total_price || 0),
+                0
+            );
             state.balance = state.budget - (state.expense ?? 0);
         }
     },
@@ -366,7 +475,7 @@ watch(
 </script>
 
 <template>
-    <div class="p-8">
+    <div class="p-8 relative h-[calc(100vh-55px)]">
         <div class="flex items-center justify-between mb-6">
             <div class="flex items-center gap-4">
                 <div
@@ -412,819 +521,233 @@ watch(
                 <strong>Close This PO</strong>
             </button>
         </div>
-        <form
-            @submit.prevent="submit"
-            class="w-full bg-white rounded-lg shadow p-8 proform"
-        >
-            <div class="flex gap-8">
-                <div class="w-1/2">
-                    <label class="flex flex-col gap-1 mb-1">
-                        <span class="text-sm text-left">Job Number</span>
-                        <div
-                            class="w-full border rounded-lg bg-white h-45px relative flex items-center"
-                        >
-                            <input
-                                type="text"
-                                class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 noicon text-14px"
-                                v-model="state.job_number"
-                            />
-                            <div class="absolute left-4 text-red-500 text-xl">
-                                <i class="ri-briefcase-line"></i>
-                            </div>
-                        </div>
-                        <div class="h-3 flex -mt-1">
-                            <span
-                                class="text-xs text-red-500"
-                                v-if="state.errors.hasOwnProperty('job_number')"
-                                >{{ state.errors?.job_number[0] }}</span
+        <form @submit.prevent="submit">
+            <div class="w-full bg-white rounded-lg shadow p-8 proform mb-6">
+                <div class="flex gap-8">
+                    <div class="w-1/2">
+                        <label class="flex flex-col gap-1 mb-1">
+                            <span class="text-sm text-left">Job Number</span>
+                            <div
+                                class="w-full border rounded-lg bg-white h-45px relative flex items-center"
                             >
-                        </div>
-                    </label>
-                    <!-- <label class="flex flex-col gap-1 mb-1">
-                        <span class="text-sm text-left">PO Open Date</span>
-                        <div
-                            class="w-full border rounded-lg bg-white h-45px relative flex items-center"
-                        >
-                            <input
-                                type="date"
-                                class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 noicon text-14px"
-                                v-model="state.client_po_date"
-                                onfocus="this.showPicker()"
-                            />
-                            <div class="absolute left-4 text-red-500 text-xl">
-                                <i class="ri-calendar-event-line"></i>
+                                <input
+                                    type="text"
+                                    class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 noicon text-14px"
+                                    v-model="state.job_number"
+                                    required
+                                />
+                                <div
+                                    class="absolute left-4 text-red-500 text-xl"
+                                >
+                                    <i class="ri-briefcase-line"></i>
+                                </div>
                             </div>
-                        </div>
-                        <div class="h-3 flex -mt-1">
-                            <span
-                                class="text-xs text-red-500"
-                                v-if="
-                                    state.errors.hasOwnProperty(
-                                        'client_po_date'
-                                    )
-                                "
-                                >{{ state.errors?.client_po_date[0] }}</span
-                            >
-                        </div>
-                    </label> -->
-                    <!-- <label class="flex flex-col gap-1 mb-1">
-                        <span class="text-sm text-left">PO Close Date</span>
-                        <div
-                            class="w-full border rounded-lg bg-white h-45px relative flex items-center"
-                        >
-                            <input
-                                type="date"
-                                class="bg-gray-50 w-full h-full rounded-lg pl-45px pr-4 noicon text-14px"
-                                v-model="state.closed_at"
-                                onfocus="this.showPicker()"
-                                disabled
-                            />
-                            <div class="absolute left-4 text-red-500 text-xl">
-                                <i class="ri-calendar-event-line"></i>
+                            <div class="h-3 flex -mt-1">
+                                <span
+                                    class="text-xs text-red-500"
+                                    v-if="
+                                        state.errors.hasOwnProperty(
+                                            'job_number'
+                                        )
+                                    "
+                                    >{{ state.errors?.job_number[0] }}</span
+                                >
                             </div>
-                        </div>
-                        <div class="h-3 flex -mt-1">
-                            <span
-                                class="text-xs text-red-500"
-                                v-if="state.errors.hasOwnProperty('closed_at')"
-                                >{{ state.errors?.closed_at[0] }}</span
-                            >
-                        </div>
-                    </label> -->
+                        </label>
 
-                    <label class="flex flex-col gap-1 mb-1">
-                        <span class="text-sm text-left"
-                            >Marketing PIC Name</span
-                        >
-                        <div
-                            class="w-full border rounded-lg bg-white h-45px relative flex items-center"
-                        >
-                            <input
-                                type="text"
-                                required
-                                class="bg-transparent w-full h-full rounded-lg pl-45px text-14px"
-                                v-model="state.pic_name"
-                            />
-                            <div class="absolute left-4 text-red-500 text-xl">
-                                <i class="ri-user-line"></i>
-                            </div>
-                        </div>
-                        <div class="h-3 flex -mt-1">
-                            <span
-                                class="text-xs text-red-500"
-                                v-if="state.errors.hasOwnProperty('pic_name')"
-                                >{{ state.errors?.pic_name[0] }}</span
+                        <label class="flex flex-col gap-1 mb-1">
+                            <span class="text-sm text-left"
+                                >Marketing PIC Name</span
                             >
-                        </div>
-                    </label>
+                            <div
+                                class="w-full border rounded-lg bg-white h-45px relative flex items-center"
+                            >
+                                <input
+                                    type="text"
+                                    required
+                                    class="bg-transparent w-full h-full rounded-lg pl-45px text-14px"
+                                    v-model="state.pic_name"
+                                />
+                                <div
+                                    class="absolute left-4 text-red-500 text-xl"
+                                >
+                                    <i class="ri-user-line"></i>
+                                </div>
+                            </div>
+                            <div class="h-3 flex -mt-1">
+                                <span
+                                    class="text-xs text-red-500"
+                                    v-if="
+                                        state.errors.hasOwnProperty('pic_name')
+                                    "
+                                    >{{ state.errors?.pic_name[0] }}</span
+                                >
+                            </div>
+                        </label>
+                    </div>
+                    <div class="w-1/2">
+                        <label class="flex flex-col gap-1 mb-1">
+                            <span class="text-sm text-left"
+                                >Client Company</span
+                            >
+                            <div
+                                class="w-full border rounded-lg bg-white h-45px relative flex items-center"
+                            >
+                                <Select1
+                                    @select="(e) => (state.client_company = e)"
+                                    :value="state.client_company"
+                                    required="true"
+                                />
+
+                                <div
+                                    class="absolute left-4 text-red-500 text-xl"
+                                >
+                                    <i class="ri-hotel-line"></i>
+                                </div>
+                            </div>
+                            <div class="h-3 flex -mt-1">
+                                <span
+                                    class="text-xs text-red-500"
+                                    v-if="
+                                        state.errors.hasOwnProperty(
+                                            'client_company'
+                                        )
+                                    "
+                                    >{{ state.errors?.client_company[0] }}</span
+                                >
+                            </div>
+                        </label>
+                        <label class="flex flex-col gap-1 mb-1">
+                            <span class="text-sm text-left"
+                                >Client PIC Name</span
+                            >
+                            <div
+                                class="w-full border rounded-lg bg-white h-45px relative flex items-center"
+                            >
+                                <input
+                                    type="text"
+                                    required
+                                    class="bg-transparent w-full h-full rounded-lg pl-45px text-14px"
+                                    v-model="state.client_pic_name"
+                                />
+                                <div
+                                    class="absolute left-4 text-red-500 text-xl"
+                                >
+                                    <i class="ri-user-line"></i>
+                                </div>
+                            </div>
+                            <div class="h-3 flex -mt-1">
+                                <span
+                                    class="text-xs text-red-500"
+                                    v-if="
+                                        state.errors.hasOwnProperty(
+                                            'client_pic_name'
+                                        )
+                                    "
+                                    >{{
+                                        state.errors?.client_pic_name[0]
+                                    }}</span
+                                >
+                            </div>
+                        </label>
+                    </div>
                 </div>
-                <div class="w-1/2">
-                    <!-- <label class="flex flex-col gap-1 mb-1">
-                        <span class="text-sm text-left">PO Number</span>
-                        <div
-                            class="w-full border rounded-lg bg-white h-45px relative flex items-center"
-                        >
-                            <input
-                                type="text"
-                                required
-                                class="bg-transparent w-full h-full rounded-lg pl-45px text-14px"
-                                v-model="state.client_po_number"
-                            />
-                            <div class="absolute left-4 text-red-500 text-xl">
-                                <i class="ri-box-3-line"></i>
-                            </div>
-                        </div>
-                        <div class="h-3 flex -mt-1">
-                            <span
-                                class="text-xs text-red-500"
-                                v-if="
-                                    state.errors.hasOwnProperty(
-                                        'client_po_number'
-                                    )
-                                "
-                                >{{ state.errors?.client_po_number[0] }}</span
-                            >
-                        </div>
-                    </label> -->
-                    <label class="flex flex-col gap-1 mb-1">
-                        <span class="text-sm text-left">Client Company</span>
-                        <div
-                            class="w-full border rounded-lg bg-white h-45px relative flex items-center"
-                        >
-                            <Select1
-                                @select="(e) => (state.client_company = e)"
-                                :value="state.client_company"
-                                required="true"
-                            />
-
-                            <div class="absolute left-4 text-red-500 text-xl">
-                                <i class="ri-hotel-line"></i>
-                            </div>
-                        </div>
-                        <div class="h-3 flex -mt-1">
-                            <span
-                                class="text-xs text-red-500"
-                                v-if="
-                                    state.errors.hasOwnProperty(
-                                        'client_company'
-                                    )
-                                "
-                                >{{ state.errors?.client_company[0] }}</span
-                            >
-                        </div>
+                <div class="text-sm text-[#667085] my-2">
+                    Choose Documents to be Uploaded
+                </div>
+                <div class="border p-3 flex justify-between rounded-lg mb-4">
+                    <label class="input flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            :value="true"
+                            v-model="state.documents.do"
+                        />
+                        <span class="text-sm">DO (Delivery Order)</span>
                     </label>
-                    <label class="flex flex-col gap-1 mb-1">
-                        <span class="text-sm text-left">Client PIC Name</span>
-                        <div
-                            class="w-full border rounded-lg bg-white h-45px relative flex items-center"
+                    <label class="input flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            :value="true"
+                            v-model="state.documents.bast"
+                        />
+                        <span class="text-sm"
+                            >BAST (Berita Acara Serah Terima)</span
                         >
-                            <input
-                                type="text"
-                                required
-                                class="bg-transparent w-full h-full rounded-lg pl-45px text-14px"
-                                v-model="state.client_pic_name"
-                            />
-                            <div class="absolute left-4 text-red-500 text-xl">
-                                <i class="ri-user-line"></i>
-                            </div>
-                        </div>
-                        <div class="h-3 flex -mt-1">
-                            <span
-                                class="text-xs text-red-500"
-                                v-if="
-                                    state.errors.hasOwnProperty(
-                                        'client_pic_name'
-                                    )
-                                "
-                                >{{ state.errors?.client_pic_name[0] }}</span
-                            >
-                        </div>
                     </label>
-
-                    <!-- <label class="flex flex-col gap-1 mb-1">
-                        <div class="flex justify-between">
-                            <span class="text-sm text-left">Budget</span>
-                            <span class="text-xs text-gray-400 text-left">{{
-                                nom(state.budget ?? 0)
-                            }}</span>
-                        </div>
-                        <div
-                            class="w-full border rounded-lg bg-white h-45px relative flex items-center"
-                        >
-                            <input
-                                type="number"
-                                required
-                                class="bg-transparent w-full h-full rounded-lg pl-45px text-14px"
-                                v-model="state.budget"
-                            />
-                            <div class="absolute left-4 text-red-500 text-xl">
-                                <i class="ri-money-dollar-box-line"></i>
-                            </div>
-                        </div>
-                        <div class="h-3 flex -mt-1">
-                            <span
-                                class="text-xs text-red-500"
-                                v-if="state.errors.hasOwnProperty('budget')"
-                                >{{ state.errors?.budget[0] }}</span
-                            >
-                        </div>
-                    </label> -->
+                    <label class="input flex items-center gap-2">
+                        <input
+                            type="checkbox"
+                            :value="true"
+                            v-model="state.documents.gr"
+                        />
+                        <span class="text-sm">GR/TBP</span>
+                    </label>
+                    <span></span>
                 </div>
             </div>
-            <div>
-                <div class="flex justify-between my-2 items-center">
+
+            <div class="pb-30">
+                <div class="flex mt-2 mb-4 items-center gap-4">
                     <div class="text-left flex flex-col">
                         <span class="text-lg"> Deposit </span>
-                        <!-- <span class="text-sm font-normal text-gray-500 italic">
-                            (Grouped by delivery)
-                        </span> -->
                     </div>
 
                     <button
                         type="button"
-                        class="h-40px px-4 border border-red-300 bg-red-500 rounded-lg gap-2 shadow text-white hover:shadow-sm hover:bg-red-600 flex items-center text-sm ml-auto hidon"
-                        @click="addNewDeposit"
+                        class="h-40px px-4 border border-red-300 bg-red-500 rounded-lg gap-2 shadow text-white hover:shadow-sm hover:bg-red-600 flex items-center text-sm hidon"
+                        @click="addNewDeposit()"
                         v-if="state.status != 'close'"
                     >
-                        <i class="ri-play-list-add-line text-xl"></i>
+                        <i class="ri-add-line text-xl"></i>
                         <strong>Add New Deposit</strong>
                     </button>
-                </div>
-                <div class="h-4"></div>
-                <template v-for="(group, i) in state.po_deposits" :key="i">
-                    <div class="border-b-2 border-red-500 pb-6 mb-6">
-                        <div class="text-left flex items-center">
-                            <span class="text-lg"> Non Actual </span>
-                        </div>
-                        <div class="mb-6">
-                            <div class="border rounded-lg">
-                                <table
-                                    class="w-full rounded-lg overflow-hidden"
-                                >
-                                    <thead class="bg-gray-100">
-                                        <tr>
-                                            <td
-                                                colspan="7"
-                                                class="bg-gray-50 border-b-2 pt-2"
-                                            >
-                                                <table
-                                                    class="px-3 text-14px w-full"
-                                                >
-                                                    <thead>
-                                                        <tr>
-                                                            <th
-                                                                class="p-1 w-1/3 font-medium text-left"
-                                                            >
-                                                                PO Number
-                                                            </th>
-                                                            <th
-                                                                class="p-1 w-1/3 font-medium text-left"
-                                                            >
-                                                                PIC
-                                                            </th>
-                                                            <th
-                                                                class="p-1 w-1/3 font-medium text-left"
-                                                            >
-                                                                PO Date
-                                                            </th>
-                                                            <td colspan="2">
-                                                                <button
-                                                                    type="button"
-                                                                    v-if="
-                                                                        state.status ==
-                                                                            'open' &&
-                                                                        user.position !==
-                                                                            'delivery' &&
-                                                                        user.position !==
-                                                                            'finance'
-                                                                    "
-                                                                    class="text-xl px-2 h-35px text-red-500 hover:bg-gray-100 rounded"
-                                                                    title="Delete non actual group"
-                                                                    @click="
-                                                                        setDeleteGroup(
-                                                                            'deposit',
-                                                                            i
-                                                                        )
-                                                                    "
-                                                                >
-                                                                    <i
-                                                                        class="ri-delete-bin-line"
-                                                                    ></i>
-                                                                </button>
-                                                            </td>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        <tr>
-                                                            <td class="p-1">
-                                                                <input
-                                                                    type="text"
-                                                                    class="w-full h-30px border rounded px-2"
-                                                                    v-model="
-                                                                        group.client_po_number
-                                                                    "
-                                                                    required
-                                                                    :disabled="
-                                                                        state.products_group.filter(
-                                                                            (
-                                                                                e
-                                                                            ) =>
-                                                                                e.client_po_number ==
-                                                                                group.client_po_number
-                                                                        )
-                                                                            .length >
-                                                                        0
-                                                                    "
-                                                                />
-                                                            </td>
-                                                            <td class="p-1">
-                                                                <input
-                                                                    type="text"
-                                                                    class="w-full h-30px border rounded px-2"
-                                                                    v-model="
-                                                                        group.client_pic_name
-                                                                    "
-                                                                    required
-                                                                />
-                                                            </td>
-                                                            <td class="p-1">
-                                                                <input
-                                                                    type="date"
-                                                                    class="w-full h-30px border rounded px-2"
-                                                                    v-model="
-                                                                        group.client_po_date
-                                                                    "
-                                                                    required
-                                                                />
-                                                            </td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                                <table
-                                                    class="px-3 text-14px w-full"
-                                                    v-if="
-                                                        user.position !==
-                                                        'delivery'
-                                                    "
-                                                >
-                                                    <thead>
-                                                        <tr>
-                                                            <th
-                                                                class="p-1 w-1/3 font-medium text-left"
-                                                            >
-                                                                Subtotal Budget
-                                                            </th>
-                                                            <th
-                                                                class="p-1 w-1/3 font-medium text-left"
-                                                            >
-                                                                Used Budget
-                                                            </th>
-                                                            <th
-                                                                class="p-1 w-1/3 font-medium text-left"
-                                                            >
-                                                                Remaining Budget
-                                                            </th>
-                                                            <td colspan="2">
-                                                                <div
-                                                                    class="w-36px"
-                                                                ></div>
-                                                            </td>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        <tr>
-                                                            <td class="p-1">
-                                                                <div
-                                                                    class="w-full h-30px bg-gray-50 border rounded px-2 flex items-center"
-                                                                >
-                                                                    <span
-                                                                        class="text-14px text-gray-500 font-semibold"
-                                                                        >{{
-                                                                            group.total_price
-                                                                                ? nom(
-                                                                                      group.total_price
-                                                                                  )
-                                                                                : 0
-                                                                        }}</span
-                                                                    >
-                                                                </div>
-                                                            </td>
-                                                            <td class="p-1">
-                                                                <div
-                                                                    class="w-full h-30px bg-gray-50 border rounded px-2 flex items-center"
-                                                                >
-                                                                    <span
-                                                                        class="text-14px text-gray-500 font-semibold"
-                                                                        >{{
-                                                                            nom(
-                                                                                state.products_group
-                                                                                    .filter(
-                                                                                        (
-                                                                                            e
-                                                                                        ) =>
-                                                                                            e.client_po_number ==
-                                                                                            group.client_po_number
-                                                                                    )
-                                                                                    .reduce(
-                                                                                        (
-                                                                                            a,
-                                                                                            b
-                                                                                        ) =>
-                                                                                            a +
-                                                                                            b.total_price,
-                                                                                        0
-                                                                                    ) ??
-                                                                                    0
-                                                                            )
-                                                                        }}</span
-                                                                    >
-                                                                </div>
-                                                            </td>
-                                                            <td class="p-1">
-                                                                <div
-                                                                    class="w-full h-30px bg-gray-50 border rounded px-2 flex items-center"
-                                                                >
-                                                                    <span
-                                                                        class="text-14px text-gray-500 font-semibold"
-                                                                        >{{
-                                                                            nom(
-                                                                                group.total_price -
-                                                                                    state.products_group
-                                                                                        .filter(
-                                                                                            (
-                                                                                                e
-                                                                                            ) =>
-                                                                                                e.client_po_number ==
-                                                                                                group.client_po_number
-                                                                                        )
-                                                                                        .reduce(
-                                                                                            (
-                                                                                                a,
-                                                                                                b
-                                                                                            ) =>
-                                                                                                a +
-                                                                                                b.total_price,
-                                                                                            0
-                                                                                        ) ??
-                                                                                    group.total_price
-                                                                            )
-                                                                        }}</span
-                                                                    >
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    </tbody>
-                                                </table>
-                                            </td>
-                                        </tr>
-                                        <tr class="border-b">
-                                            <th
-                                                class="text-left text-sm px-1 py-2 w-1/5"
-                                            >
-                                                Name
-                                            </th>
-                                            <th
-                                                class="text-left text-sm px-1 py-2 w-80px"
-                                            >
-                                                Quantity
-                                            </th>
-                                            <th
-                                                class="text-left text-sm px-1 py-2 w-120px"
-                                            >
-                                                Price/Pcs
-                                            </th>
-                                            <th
-                                                class="text-left text-sm px-1 py-2 w-150px"
-                                            >
-                                                Total Amount
-                                            </th>
-                                            <th
-                                                class="text-left text-sm px-1 py-2"
-                                            >
-                                                Description
-                                            </th>
-                                            <th class="w-60px"></th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        <tr
-                                            class="border-b"
-                                            v-for="(
-                                                product, ii
-                                            ) in group.products"
-                                            :key="ii"
-                                        >
-                                            <td class="">
-                                                <div
-                                                    class="flex items-center flex-col gap-1"
-                                                >
-                                                    <input
-                                                        type="text"
-                                                        class="w-full h-40px px-1 text-sm bg-transparent"
-                                                        placeholder="Product Name"
-                                                        v-model="product.name"
-                                                        required
-                                                        :disabled="
-                                                            group.manufacture !=
-                                                            null
-                                                        "
-                                                    />
-                                                    <span
-                                                        class="text-xs text-red-500 text-left w-full block pl-4"
-                                                        v-if="
-                                                            state.errors.hasOwnProperty(
-                                                                `products.${ii}.name`
-                                                            )
-                                                        "
-                                                        >{{
-                                                            state.errors[
-                                                                `products.${ii}.name`
-                                                            ][0].replace(
-                                                                `products.${ii}.name `,
-                                                                ""
-                                                            )
-                                                        }}</span
-                                                    >
-                                                </div>
-                                            </td>
-                                            <td class="">
-                                                <div
-                                                    class="flex items-center flex-col gap-1"
-                                                >
-                                                    <input
-                                                        type="number"
-                                                        class="w-full h-40px px-1 text-sm bg-transparent"
-                                                        placeholder="0"
-                                                        v-model="
-                                                            product.quantity
-                                                        "
-                                                        required
-                                                        :disabled="
-                                                            group.manufacture !=
-                                                            null
-                                                        "
-                                                    />
-                                                    <span
-                                                        class="text-xs text-red-500 text-left w-full block pl-4"
-                                                        v-if="
-                                                            state.errors.hasOwnProperty(
-                                                                `products.${ii}.quantity`
-                                                            )
-                                                        "
-                                                        >{{
-                                                            state.errors[
-                                                                `products.${ii}.quantity`
-                                                            ][0].replace(
-                                                                `products.${ii}.quantity `,
-                                                                ""
-                                                            )
-                                                        }}</span
-                                                    >
-                                                </div>
-                                            </td>
-                                            <td class="">
-                                                <div
-                                                    class="flex items-center flex-col gap-1"
-                                                >
-                                                    <input
-                                                        type="number"
-                                                        class="w-full h-40px px-1 text-sm bg-transparent"
-                                                        placeholder="0"
-                                                        v-model="product.price"
-                                                        required
-                                                        :disabled="
-                                                            group.manufacture !=
-                                                            null
-                                                        "
-                                                        v-if="
-                                                            user.position !==
-                                                            'delivery'
-                                                        "
-                                                    />
-                                                    <input
-                                                        type="number"
-                                                        class="w-full h-40px px-1 text-sm bg-transparent"
-                                                        placeholder="0"
-                                                        required
-                                                        :disabled="
-                                                            group.manufacture !=
-                                                            null
-                                                        "
-                                                        v-else
-                                                    />
-                                                    <span
-                                                        class="text-xs text-red-500 text-left w-full block pl-4"
-                                                        v-if="
-                                                            state.errors.hasOwnProperty(
-                                                                `products.${ii}.price`
-                                                            )
-                                                        "
-                                                        >{{
-                                                            state.errors[
-                                                                `products.${ii}.price`
-                                                            ][0].replace(
-                                                                `products.${ii}.price `,
-                                                                ""
-                                                            )
-                                                        }}</span
-                                                    >
-                                                </div>
-                                            </td>
 
-                                            <td class="">
-                                                <div
-                                                    class="flex items-center flex-col gap-1"
-                                                >
-                                                    <input
-                                                        type="text"
-                                                        class="w-full h-40px px-1 text-sm bg-transparent"
-                                                        placeholder="0"
-                                                        disabled
-                                                        :value="
-                                                            product.total_price
-                                                                ? nom(
-                                                                      product.total_price
-                                                                  )
-                                                                : null
-                                                        "
-                                                        v-if="
-                                                            user.position !==
-                                                            'delivery'
-                                                        "
-                                                    />
-                                                    <input
-                                                        type="number"
-                                                        class="w-full h-40px px-1 text-sm bg-transparent"
-                                                        placeholder="0"
-                                                        required
-                                                        :disabled="
-                                                            group.manufacture !=
-                                                            null
-                                                        "
-                                                        v-else
-                                                    />
-                                                    <span
-                                                        class="text-xs text-red-500 text-left w-full block pl-4"
-                                                        v-if="
-                                                            state.errors.hasOwnProperty(
-                                                                `products.${ii}.total_price`
-                                                            )
-                                                        "
-                                                        >{{
-                                                            state.errors[
-                                                                `products.${ii}.total_price`
-                                                            ][0].replace(
-                                                                `products.${ii}.total_price `,
-                                                                ""
-                                                            )
-                                                        }}</span
-                                                    >
-                                                </div>
-                                            </td>
-                                            <td class="">
-                                                <div
-                                                    class="flex items-center flex-col gap-1"
-                                                >
-                                                    <textarea
-                                                        class="w-full h-full px-1 text-sm h-40px pt-10px bg-transparent"
-                                                        placeholder="Product Description"
-                                                        v-model="
-                                                            product.description
-                                                        "
-                                                        :disabled="
-                                                            group.manufacture !=
-                                                            null
-                                                        "
-                                                    ></textarea>
-
-                                                    <span
-                                                        class="text-xs text-red-500 text-left w-full block pl-4"
-                                                        v-if="
-                                                            state.errors.hasOwnProperty(
-                                                                `products.${ii}.description`
-                                                            )
-                                                        "
-                                                        >{{
-                                                            state.errors[
-                                                                `products.${ii}.description`
-                                                            ][0].replace(
-                                                                `products.${ii}.description `,
-                                                                ""
-                                                            )
-                                                        }}</span
-                                                    >
-                                                </div>
-                                            </td>
-                                            <td class="p-1 input">
-                                                <button
-                                                    type="button"
-                                                    v-if="
-                                                        group.products.length >
-                                                            1 &&
-                                                        state.status ==
-                                                            'open' &&
-                                                        user.position !==
-                                                            'delivery' &&
-                                                        user.position !==
-                                                            'finance'
-                                                    "
-                                                    class="text-xl px-2 h-35px text-[#667085] hover:bg-gray-100 rounded"
-                                                    @click="
-                                                        setDelete(
-                                                            'deposit',
-                                                            i,
-                                                            ii
-                                                        )
-                                                    "
-                                                >
-                                                    <i
-                                                        class="ri-delete-bin-line"
-                                                    ></i>
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    </tbody>
-                                    <tfoot>
-                                        <tr v-if="state.status == 'open'">
-                                            <td colspan="8">
-                                                <div class="flex border-t">
-                                                    <div class="flex-1">
-                                                        <button
-                                                            @click="
-                                                                addNewGroup(
-                                                                    group.client_po_number
-                                                                )
-                                                            "
-                                                            v-if="
-                                                                state.status !=
-                                                                    'close' &&
-                                                                user.position !==
-                                                                    'delivery' &&
-                                                                user.position !==
-                                                                    'finance' &&
-                                                                group.client_po_number
-                                                            "
-                                                            type="button"
-                                                            class="flex-1 text-sm px-4 py-2 bg-red-500 text-white hover:bg-red-600 items-center justify-center flex gap-4 w-full rounded-bl-lg"
-                                                        >
-                                                            <i
-                                                                class="ri-add-box-line text-xl"
-                                                            ></i>
-                                                            <strong
-                                                                >Add New
-                                                                Actual</strong
-                                                            >
-                                                        </button>
-                                                    </div>
-                                                    <div class="flex-1"></div>
-                                                    <div class="flex-1"></div>
-                                                    <button
-                                                        type="button"
-                                                        class="flex-1 text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-br-lg hidon"
-                                                        @click="
-                                                            () =>
-                                                                group.products.push(
-                                                                    {
-                                                                        name: '',
-                                                                        quantity:
-                                                                            '',
-                                                                        description:
-                                                                            '',
-                                                                        price: null,
-                                                                        total_price:
-                                                                            null,
-                                                                        is_production: true,
-                                                                    }
-                                                                )
-                                                        "
-                                                    >
-                                                        <i
-                                                            class="ri-add-box-line text-xl"
-                                                        ></i>
-                                                        <span>
-                                                            Add More Item
-                                                        </span>
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    </tfoot>
-                                </table>
-                            </div>
-                        </div>
-
-                        <div class="flex justify-between items-center">
-                            <div class="text-left flex items-center">
-                                <span class="text-lg"> Actual </span>
-                            </div>
-                        </div>
-                        <template
-                            v-for="(group1, i) in state.products_group.filter(
-                                (e) =>
-                                    e.client_po_number == group.client_po_number
-                            )"
-                            :key="i"
+                    <div
+                        class="flex items-center gap-4 h-40px rounded-lg border w-240px overflow-hidden bg-white px-2"
+                    >
+                        <i class="ri-box-3-line text-xl text-red-500"></i>
+                        <select
+                            class="w-full h-full"
+                            @change="switchPO"
+                            :value="state.current_po"
                         >
+                            <option disabled>Select PO Deposit</option>
+                            <option
+                                v-for="(po, i) in state.po_deposits"
+                                :key="i"
+                                :value="i"
+                            >
+                                {{ po.client_po_number || 'New Deposit' }}
+                            </option>
+                        </select>
+                    </div>
+                </div>
+
+                <template v-for="(group, i) in state.po_deposits" :key="i">
+                    <template v-if="i == state.current_po">
+                        <div
+                            class="w-full bg-white rounded-lg shadow p-8 proform mb-6"
+                        >
+                            <div
+                                class="text-left flex items-center justify-between mb-4 h-10"
+                            >
+                                <span class="text-lg"> Non Actual </span>
+
+                                <button
+                                    @click="addNewGroup(group.client_po_number)"
+                                    v-if="
+                                        state.status != 'close' &&
+                                        user.position !== 'delivery' &&
+                                        user.position !== 'finance' &&
+                                        group.client_po_number
+                                    "
+                                    type="button"
+                                    class="text-sm px-4 py-1 bg-red-500 text-white hover:bg-red-600 items-center justify-center flex gap-4 rounded-lg"
+                                >
+                                    <i class="ri-add-box-line text-xl"></i>
+                                    <strong>Add New Actual</strong>
+                                </button>
+                            </div>
                             <div class="mb-6">
                                 <div class="border rounded-lg">
                                     <table
@@ -1242,26 +765,19 @@ watch(
                                                         <thead>
                                                             <tr>
                                                                 <th
-                                                                    class="p-1 w-1/4 font-medium text-left"
+                                                                    class="p-1 w-1/3 font-medium text-left"
                                                                 >
-                                                                    Title
+                                                                    PO Number
                                                                 </th>
                                                                 <th
-                                                                    class="p-1 w-1/4 font-medium text-left"
+                                                                    class="p-1 w-1/3 font-medium text-left"
                                                                 >
-                                                                    Delivery Job
-                                                                    Number
+                                                                    PIC
                                                                 </th>
                                                                 <th
-                                                                    class="p-1 w-1/4 font-medium text-left"
+                                                                    class="p-1 w-1/3 font-medium text-left"
                                                                 >
-                                                                    Sent To
-                                                                    Delivery
-                                                                </th>
-                                                                <th
-                                                                    class="p-1 w-1/4 font-medium text-left"
-                                                                >
-                                                                    Subtotal
+                                                                    PO Date
                                                                 </th>
                                                                 <td colspan="2">
                                                                     <button
@@ -1273,19 +789,14 @@ watch(
                                                                                 'delivery' &&
                                                                             user.position !==
                                                                                 'finance'
+                                                                                && state.po_deposits.length > 1
                                                                         "
                                                                         class="text-xl px-2 h-35px text-red-500 hover:bg-gray-100 rounded"
-                                                                        title="Delete actual group"
+                                                                        title="Delete non actual group"
                                                                         @click="
                                                                             setDeleteGroup(
-                                                                                'product',
-                                                                                state.products_group.findIndex(
-                                                                                    (
-                                                                                        e
-                                                                                    ) =>
-                                                                                        e.job_number ==
-                                                                                        group1.job_number
-                                                                                )
+                                                                                'deposit',
+                                                                                i
                                                                             )
                                                                         "
                                                                     >
@@ -1293,6 +804,9 @@ watch(
                                                                             class="ri-delete-bin-line"
                                                                         ></i>
                                                                     </button>
+                                                                    <div v-else class="w-36px">
+
+                                                                    </div>
                                                                 </td>
                                                             </tr>
                                                         </thead>
@@ -1303,17 +817,19 @@ watch(
                                                                         type="text"
                                                                         class="w-full h-30px border rounded px-2"
                                                                         v-model="
-                                                                            group1.title
+                                                                            group.client_po_number
                                                                         "
-                                                                        :class="
-                                                                            group1.manufacture ==
-                                                                            null
-                                                                                ? 'bg-white'
-                                                                                : 'bg-gray-50'
-                                                                        "
+                                                                        required
                                                                         :disabled="
-                                                                            group1.manufacture !=
-                                                                            null
+                                                                            state.products_group.filter(
+                                                                                (
+                                                                                    e
+                                                                                ) =>
+                                                                                    e.client_po_number ==
+                                                                                    group.client_po_number
+                                                                            )
+                                                                                .length >
+                                                                            0
                                                                         "
                                                                     />
                                                                 </td>
@@ -1322,20 +838,59 @@ watch(
                                                                         type="text"
                                                                         class="w-full h-30px border rounded px-2"
                                                                         v-model="
-                                                                            group1.job_number
+                                                                            group.client_pic_name
                                                                         "
-                                                                        :class="
-                                                                            group1.manufacture ==
-                                                                            null
-                                                                                ? 'bg-white'
-                                                                                : 'bg-gray-50'
-                                                                        "
-                                                                        :disabled="
-                                                                            group1.manufacture !=
-                                                                            null
-                                                                        "
+                                                                        required
                                                                     />
                                                                 </td>
+                                                                <td class="p-1">
+                                                                    <input
+                                                                        type="date"
+                                                                        class="w-full h-30px border rounded px-2"
+                                                                        v-model="
+                                                                            group.client_po_date
+                                                                        "
+                                                                        required
+                                                                    />
+                                                                </td>
+                                                            </tr>
+                                                        </tbody>
+                                                    </table>
+                                                    <table
+                                                        class="px-3 text-14px w-full"
+                                                        v-if="
+                                                            user.position !==
+                                                            'delivery'
+                                                        "
+                                                    >
+                                                        <thead>
+                                                            <tr>
+                                                                <th
+                                                                    class="p-1 w-1/3 font-medium text-left"
+                                                                >
+                                                                    Subtotal
+                                                                    Budget
+                                                                </th>
+                                                                <th
+                                                                    class="p-1 w-1/3 font-medium text-left"
+                                                                >
+                                                                    Used Budget
+                                                                </th>
+                                                                <th
+                                                                    class="p-1 w-1/3 font-medium text-left"
+                                                                >
+                                                                    Remaining
+                                                                    Budget
+                                                                </th>
+                                                                <td colspan="2">
+                                                                    <div
+                                                                        class="w-36px"
+                                                                    ></div>
+                                                                </td>
+                                                            </tr>
+                                                        </thead>
+                                                        <tbody>
+                                                            <tr>
                                                                 <td class="p-1">
                                                                     <div
                                                                         class="w-full h-30px bg-gray-50 border rounded px-2 flex items-center"
@@ -1343,7 +898,11 @@ watch(
                                                                         <span
                                                                             class="text-14px text-gray-500 font-semibold"
                                                                             >{{
-                                                                                group1.sent_to_del_at
+                                                                                group.total_price
+                                                                                    ? nom(
+                                                                                          group.total_price
+                                                                                      )
+                                                                                    : 0
                                                                             }}</span
                                                                         >
                                                                     </div>
@@ -1355,11 +914,58 @@ watch(
                                                                         <span
                                                                             class="text-14px text-gray-500 font-semibold"
                                                                             >{{
-                                                                                group1.total_price
-                                                                                    ? nom(
-                                                                                          group1.total_price
-                                                                                      )
-                                                                                    : 0
+                                                                                nom(
+                                                                                    state.products_group
+                                                                                        .filter(
+                                                                                            (
+                                                                                                e
+                                                                                            ) =>
+                                                                                                e.client_po_number ==
+                                                                                                group.client_po_number
+                                                                                        )
+                                                                                        .reduce(
+                                                                                            (
+                                                                                                a,
+                                                                                                b
+                                                                                            ) =>
+                                                                                                a +
+                                                                                                b.total_price,
+                                                                                            0
+                                                                                        ) ??
+                                                                                        0
+                                                                                )
+                                                                            }}</span
+                                                                        >
+                                                                    </div>
+                                                                </td>
+                                                                <td class="p-1">
+                                                                    <div
+                                                                        class="w-full h-30px bg-gray-50 border rounded px-2 flex items-center"
+                                                                    >
+                                                                        <span
+                                                                            class="text-14px text-gray-500 font-semibold"
+                                                                            >{{
+                                                                                nom(
+                                                                                    group.total_price -
+                                                                                        state.products_group
+                                                                                            .filter(
+                                                                                                (
+                                                                                                    e
+                                                                                                ) =>
+                                                                                                    e.client_po_number ==
+                                                                                                    group.client_po_number
+                                                                                            )
+                                                                                            .reduce(
+                                                                                                (
+                                                                                                    a,
+                                                                                                    b
+                                                                                                ) =>
+                                                                                                    a +
+                                                                                                    b.total_price,
+                                                                                                0
+                                                                                            ) ??
+                                                                                        group.total_price
+                                                                                )
                                                                             }}</span
                                                                         >
                                                                     </div>
@@ -1395,11 +1001,6 @@ watch(
                                                 >
                                                     Description
                                                 </th>
-                                                <th
-                                                    class="text-left text-sm px-1 py-2 w-80px"
-                                                >
-                                                    Production
-                                                </th>
                                                 <th class="w-60px"></th>
                                             </tr>
                                         </thead>
@@ -1408,7 +1009,7 @@ watch(
                                                 class="border-b"
                                                 v-for="(
                                                     product, ii
-                                                ) in group1.products"
+                                                ) in group.products"
                                                 :key="ii"
                                             >
                                                 <td class="">
@@ -1424,7 +1025,7 @@ watch(
                                                             "
                                                             required
                                                             :disabled="
-                                                                group1.manufacture !=
+                                                                group.manufacture !=
                                                                 null
                                                             "
                                                         />
@@ -1446,13 +1047,11 @@ watch(
                                                         >
                                                     </div>
                                                 </td>
-
                                                 <td class="">
                                                     <div
                                                         class="flex items-center flex-col gap-1"
                                                     >
-                                                        <input
-                                                            type="number"
+                                                        <INumber
                                                             class="w-full h-40px px-1 text-sm bg-transparent"
                                                             placeholder="0"
                                                             v-model="
@@ -1460,7 +1059,7 @@ watch(
                                                             "
                                                             required
                                                             :disabled="
-                                                                group1.manufacture !=
+                                                                group.manufacture !=
                                                                 null
                                                             "
                                                         />
@@ -1486,8 +1085,7 @@ watch(
                                                     <div
                                                         class="flex items-center flex-col gap-1"
                                                     >
-                                                        <input
-                                                            type="number"
+                                                        <INumber
                                                             class="w-full h-40px px-1 text-sm bg-transparent"
                                                             placeholder="0"
                                                             v-model="
@@ -1495,7 +1093,7 @@ watch(
                                                             "
                                                             required
                                                             :disabled="
-                                                                group1.manufacture !=
+                                                                group.manufacture !=
                                                                 null
                                                             "
                                                             v-if="
@@ -1503,13 +1101,12 @@ watch(
                                                                 'delivery'
                                                             "
                                                         />
-                                                        <input
-                                                            type="number"
+                                                        <INumber
                                                             class="w-full h-40px px-1 text-sm bg-transparent"
                                                             placeholder="0"
                                                             required
                                                             :disabled="
-                                                                group1.manufacture !=
+                                                                group.manufacture !=
                                                                 null
                                                             "
                                                             v-else
@@ -1532,6 +1129,7 @@ watch(
                                                         >
                                                     </div>
                                                 </td>
+
                                                 <td class="">
                                                     <div
                                                         class="flex items-center flex-col gap-1"
@@ -1553,13 +1151,12 @@ watch(
                                                                 'delivery'
                                                             "
                                                         />
-                                                        <input
-                                                            type="number"
+                                                        <INumber
                                                             class="w-full h-40px px-1 text-sm bg-transparent"
                                                             placeholder="0"
                                                             required
                                                             :disabled="
-                                                                group1.manufacture !=
+                                                                group.manufacture !=
                                                                 null
                                                             "
                                                             v-else
@@ -1593,7 +1190,7 @@ watch(
                                                                 product.description
                                                             "
                                                             :disabled="
-                                                                group1.manufacture !=
+                                                                group.manufacture !=
                                                                 null
                                                             "
                                                         ></textarea>
@@ -1617,30 +1214,11 @@ watch(
                                                     </div>
                                                 </td>
                                                 <td class="p-1 input">
-                                                    <div
-                                                        class="px-1 flex justify-center w-full"
-                                                    >
-                                                        <input
-                                                            type="checkbox"
-                                                            value="production"
-                                                            v-model="
-                                                                product.is_production
-                                                            "
-                                                            :disabled="
-                                                                group1.manufacture !=
-                                                                null
-                                                            "
-                                                        />
-                                                    </div>
-                                                </td>
-                                                <td class="p-1 input">
                                                     <button
                                                         type="button"
                                                         v-if="
-                                                            group1.products
+                                                            group.products
                                                                 .length > 1 &&
-                                                            group1.manufacture ==
-                                                                null &&
                                                             state.status ==
                                                                 'open' &&
                                                             user.position !==
@@ -1651,12 +1229,8 @@ watch(
                                                         class="text-xl px-2 h-35px text-[#667085] hover:bg-gray-100 rounded"
                                                         @click="
                                                             setDelete(
-                                                                'product',
-                                                                state.products_group.findIndex(
-                                                                    (e) =>
-                                                                        e.job_number ==
-                                                                        group1.job_number
-                                                                ),
+                                                                'deposit',
+                                                                i,
                                                                 ii
                                                             )
                                                         "
@@ -1669,50 +1243,15 @@ watch(
                                             </tr>
                                         </tbody>
                                         <tfoot>
-                                            <tr
-                                                v-if="
-                                                    group1.sent_to_del_at ==
-                                                        null &&
-                                                    user.position !==
-                                                        'delivery' &&
-                                                    user.position !== 'finance'
-                                                "
-                                            >
+                                            <tr v-if="state.status == 'open'">
                                                 <td colspan="8">
                                                     <div class="flex border-t">
-                                                        <button
-                                                            @click="
-                                                                () =>
-                                                                    sendToDel(i)
-                                                            "
-                                                            type="button"
-                                                            class="flex-1 text-sm px-4 py-2 bg-red-500 text-white hover:bg-red-600 items-center justify-center flex gap-4 w-full rounded-bl-lg"
-                                                            v-if="group1.id"
-                                                        >
-                                                            <i
-                                                                class="ri-share-forward-2-line text-xl"
-                                                            ></i>
-                                                            <strong
-                                                                >Send to
-                                                                Delivery</strong
-                                                            >
-                                                        </button>
-                                                        <div
-                                                            class="flex-1"
-                                                            v-else
-                                                        ></div>
-                                                        <div
-                                                            class="flex-1"
-                                                        ></div>
-                                                        <div
-                                                            class="flex-1"
-                                                        ></div>
                                                         <button
                                                             type="button"
                                                             class="flex-1 text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-br-lg hidon"
                                                             @click="
                                                                 () =>
-                                                                    group1.products.push(
+                                                                    group.products.push(
                                                                         {
                                                                             name: '',
                                                                             quantity:
@@ -1741,431 +1280,567 @@ watch(
                                     </table>
                                 </div>
                             </div>
-                        </template>
-                    </div>
-                </template>
-                <!-- <div class="flex justify-between my-2 items-center">
-                    <div class="text-left flex flex-col">
-                        <span class="text-lg"> Actual </span>
-                    </div>
-
-                    <button
-                        type="button"
-                        class="h-40px px-4 border border-red-300 bg-red-500 rounded-lg gap-2 shadow text-white hover:shadow-sm hover:bg-red-600 flex items-center text-sm ml-auto hidon"
-                        @click="addNewGroup"
-                        v-if="
-                             state.status != 'close'
-                        "
-                    >
-                        <i class="ri-play-list-add-line text-xl"></i>
-                        <strong>Add New Group</strong>
-                    </button>
-                </div>
-                <div class="h-4"></div>
-                <template v-for="(group, i) in state.products_group" :key="i">
-                    <div class="mb-8">
-                        <div class="border rounded-lg">
-                            <table class="w-full rounded-lg overflow-hidden">
-                                <thead class="bg-gray-100">
-                                    <tr>
-                                        <td
-                                            colspan="7"
-                                            class="bg-gray-50 border-b-2 pt-2"
+                        </div>
+                        <div
+                            class="w-full bg-white rounded-lg shadow p-8 proform mb-6"
+                            v-if="
+                                state.products_group.filter(
+                                    (e) =>
+                                        e.client_po_number ==
+                                        group.client_po_number
+                                ).length
+                            "
+                        >
+                            <div class="flex justify-between items-center">
+                                <div class="text-left flex items-center">
+                                    <span class="text-lg"> Actual </span>
+                                </div>
+                            </div>
+                            <template
+                                v-for="(
+                                    group1, i
+                                ) in state.products_group.filter(
+                                    (e) =>
+                                        e.client_po_number ==
+                                        group.client_po_number
+                                )"
+                                :key="i"
+                            >
+                                <div class="mb-6">
+                                    <div class="border rounded-lg">
+                                        <table
+                                            class="w-full rounded-lg overflow-hidden"
                                         >
-                                            <table
-                                                class="px-3 text-14px w-full"
-                                            >
-                                                <thead>
-                                                    <tr>
-                                                        <th
-                                                            class="p-1 w-1/4 font-medium text-left"
+                                            <thead class="bg-gray-100">
+                                                <tr>
+                                                    <td
+                                                        colspan="7"
+                                                        class="bg-gray-50 border-b-2 pt-2"
+                                                    >
+                                                        <table
+                                                            class="px-3 text-14px w-full"
                                                         >
-                                                            Title
-                                                        </th>
-                                                        <th
-                                                            class="p-1 w-1/4 font-medium text-left"
+                                                            <thead>
+                                                                <tr>
+                                                                    <th
+                                                                        class="p-1 w-1/4 font-medium text-left"
+                                                                    >
+                                                                        Title
+                                                                    </th>
+                                                                    <th
+                                                                        class="p-1 w-1/4 font-medium text-left"
+                                                                    >
+                                                                        Delivery
+                                                                        Job
+                                                                        Number
+                                                                    </th>
+                                                                    <th
+                                                                        class="p-1 w-1/4 font-medium text-left"
+                                                                    >
+                                                                        Project Type
+                                                                    </th>
+                                                                    <th
+                                                                        class="p-1 w-1/4 font-medium text-left"
+                                                                    >
+                                                                        Subtotal
+                                                                    </th>
+                                                                    <td
+                                                                        colspan="2"
+                                                                    >
+                                                                        <button
+                                                                            type="button"
+                                                                            v-if="
+                                                                                state.status ==
+                                                                                    'open' &&
+                                                                                user.position !==
+                                                                                    'delivery' &&
+                                                                                user.position !==
+                                                                                    'finance'
+                                                                                
+                                                                            "
+                                                                            class="text-xl px-2 h-35px text-red-500 hover:bg-gray-100 rounded"
+                                                                            title="Delete actual group"
+                                                                            @click="
+                                                                                setDeleteGroup(
+                                                                                    'product',
+                                                                                    state.products_group.findIndex(
+                                                                                        (
+                                                                                            e
+                                                                                        ) =>
+                                                                                            e.job_number ==
+                                                                                            group1.job_number
+                                                                                    )
+                                                                                )
+                                                                            "
+                                                                        >
+                                                                            <i
+                                                                                class="ri-delete-bin-line"
+                                                                            ></i>
+                                                                        </button>
+                                                                    </td>
+                                                                </tr>
+                                                            </thead>
+                                                            <tbody>
+                                                                <tr>
+                                                                    <td
+                                                                        class="p-1"
+                                                                    >
+                                                                        <input
+                                                                            type="text"
+                                                                            class="w-full h-30px border rounded px-2"
+                                                                            v-model="
+                                                                                group1.title
+                                                                            "
+                                                                            :class="
+                                                                                group1.manufacture ==
+                                                                                null
+                                                                                    ? 'bg-white'
+                                                                                    : 'bg-gray-50'
+                                                                            "
+                                                                            :disabled="
+                                                                                group1.manufacture !=
+                                                                                null
+                                                                            "
+                                                                        />
+                                                                    </td>
+                                                                    <td
+                                                                        class="p-1"
+                                                                    >
+                                                                        <input
+                                                                            type="text"
+                                                                            class="w-full h-30px border rounded px-2"
+                                                                            v-model="
+                                                                                group1.job_number
+                                                                            "
+                                                                            :class="
+                                                                                group1.manufacture ==
+                                                                                null
+                                                                                    ? 'bg-white'
+                                                                                    : 'bg-gray-50'
+                                                                            "
+                                                                            :disabled="
+                                                                                group1.manufacture !=
+                                                                                null
+                                                                            "
+                                                                        />
+                                                                    </td>
+                                                                    <td
+                                                                        class="p-1"
+                                                                    >
+                                                                        <div
+                                                                            class="w-full h-30px bg-white border rounded px-2 flex items-center"
+                                                                        >
+                                                                            <!-- <span
+                                                                                class="text-14px text-gray-500 font-semibold"
+                                                                                >{{
+                                                                                    group1.sent_to_del_at
+                                                                                }}</span
+                                                                            > -->
+                                                                            <select v-model="group1.project_type" class="w-full h-30px bg-transparent">
+                                                                                <option v-for="i in ['gimmick','design','print','payment']" :value="i" >{{ i == 'payment' ? 'Supplier Payment' : i.charAt(0).toUpperCase() + i.slice(1) }}</option>
+                                                                            </select>   
+                                                                        </div>
+                                                                    </td>
+                                                                    <td
+                                                                        class="p-1"
+                                                                    >
+                                                                        <div
+                                                                            class="w-full h-30px bg-gray-50 border rounded px-2 flex items-center"
+                                                                        >
+                                                                            <span
+                                                                                class="text-14px text-gray-500 font-semibold"
+                                                                                >{{
+                                                                                    group1.total_price
+                                                                                        ? nom(
+                                                                                              group1.total_price
+                                                                                          )
+                                                                                        : 0
+                                                                                }}</span
+                                                                            >
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            </tbody>
+                                                        </table>
+                                                    </td>
+                                                </tr>
+                                                <tr class="border-b">
+                                                    <th
+                                                        class="text-left text-sm px-1 py-2 w-1/5"
+                                                    >
+                                                        Name
+                                                    </th>
+                                                    <th
+                                                        class="text-left text-sm px-1 py-2 w-80px"
+                                                    >
+                                                        Quantity
+                                                    </th>
+                                                    <th
+                                                        class="text-left text-sm px-1 py-2 w-120px"
+                                                    >
+                                                        Price/Pcs
+                                                    </th>
+                                                    <th
+                                                        class="text-left text-sm px-1 py-2 w-150px"
+                                                    >
+                                                        Total Amount
+                                                    </th>
+                                                    <th
+                                                        class="text-left text-sm px-1 py-2"
+                                                    >
+                                                        Description
+                                                    </th>
+                                                    <!-- <th
+                                                        class="text-left text-sm px-1 py-2 w-80px"
+                                                    >
+                                                        Production
+                                                    </th> -->
+                                                    <th class="w-60px"></th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr
+                                                    class="border-b"
+                                                    v-for="(
+                                                        product, ii
+                                                    ) in group1.products"
+                                                    :key="ii"
+                                                >
+                                                    <td class="">
+                                                        <div
+                                                            class="flex items-center flex-col gap-1"
                                                         >
-                                                            Delivery Job Number
-                                                        </th>
-                                                        <th
-                                                            class="p-1 w-1/4 font-medium text-left"
-                                                        >
-                                                            Sent To Delivery
-                                                        </th>
-                                                        <th
-                                                            class="p-1 w-1/4 font-medium text-left"
-                                                        >
-                                                            Subtotal
-                                                        </th>
-                                                    </tr>
-                                                </thead>
-                                                <tbody>
-                                                    <tr>
-                                                        <td class="p-1">
                                                             <input
                                                                 type="text"
-                                                                class="w-full h-30px border rounded px-2"
+                                                                class="w-full h-40px px-1 text-sm bg-transparent"
+                                                                placeholder="Product Name"
                                                                 v-model="
-                                                                    group.title
+                                                                    product.name
                                                                 "
-                                                                :class="
-                                                                    group.manufacture ==
-                                                                    null
-                                                                        ? 'bg-white'
-                                                                        : 'bg-gray-50'
-                                                                "
+                                                                required
                                                                 :disabled="
-                                                                    group.manufacture !=
+                                                                    group1.manufacture !=
                                                                     null
                                                                 "
                                                             />
-                                                        </td>
-                                                        <td class="p-1">
-                                                            <div
-                                                                class="w-full h-30px bg-gray-50 border rounded px-2 flex items-center"
+                                                            <span
+                                                                class="text-xs text-red-500 text-left w-full block pl-4"
+                                                                v-if="
+                                                                    state.errors.hasOwnProperty(
+                                                                        `products.${ii}.name`
+                                                                    )
+                                                                "
+                                                                >{{
+                                                                    state.errors[
+                                                                        `products.${ii}.name`
+                                                                    ][0].replace(
+                                                                        `products.${ii}.name `,
+                                                                        ""
+                                                                    )
+                                                                }}</span
                                                             >
-                                                                <span
-                                                                    class="text-14px text-gray-500 font-semibold"
-                                                                    >{{
-                                                                        group.job_number
-                                                                    }}</span
-                                                                >
-                                                            </div>
-                                                        </td>
-                                                        <td class="p-1">
-                                                            <div
-                                                                class="w-full h-30px bg-gray-50 border rounded px-2 flex items-center"
-                                                            >
-                                                                <span
-                                                                    class="text-14px text-gray-500 font-semibold"
-                                                                    >{{
-                                                                        group.sent_to_del_at
-                                                                    }}</span
-                                                                >
-                                                            </div>
-                                                        </td>
-                                                        <td class="p-1">
-                                                            <div
-                                                                class="w-full h-30px bg-gray-50 border rounded px-2 flex items-center"
-                                                            >
-                                                                <span
-                                                                    class="text-14px text-gray-500 font-semibold"
-                                                                    >{{
-                                                                        group.total_price
-                                                                            ? nom(
-                                                                                  group.total_price
-                                                                              )
-                                                                            : 0
-                                                                    }}</span
-                                                                >
-                                                            </div>
-                                                        </td>
-                                                    </tr>
-                                                </tbody>
-                                            </table>
-                                        </td>
-                                    </tr>
-                                    <tr class="border-b">
-                                        <th
-                                            class="text-left text-sm px-1 py-2 w-1/5"
-                                        >
-                                            Name
-                                        </th>
-                                        <th
-                                            class="text-left text-sm px-1 py-2 w-80px"
-                                        >
-                                            Quantity
-                                        </th>
-                                        <th
-                                            class="text-left text-sm px-1 py-2 w-120px"
-                                        >
-                                            Price/Pcs
-                                        </th>
-                                        <th
-                                            class="text-left text-sm px-1 py-2 w-150px"
-                                        >
-                                            Total Amount
-                                        </th>
-                                        <th class="text-left text-sm px-1 py-2">
-                                            Description
-                                        </th>
-                                        <th
-                                            class="text-left text-sm px-1 py-2 w-80px"
-                                        >
-                                            Production
-                                        </th>
-                                        <th class="w-60px"></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr
-                                        class="border-b"
-                                        v-for="(product, ii) in group.products"
-                                        :key="ii"
-                                    >
-                                        <td class="">
-                                            <div
-                                                class="flex items-center flex-col gap-1"
-                                            >
-                                                <input
-                                                    type="text"
-                                                    class="w-full h-40px px-1 text-sm bg-transparent"
-                                                    placeholder="Product Name"
-                                                    v-model="product.name"
-                                                    required
-                                                    :disabled="
-                                                        group.manufacture !=
-                                                        null
-                                                    "
-                                                />
-                                                <span
-                                                    class="text-xs text-red-500 text-left w-full block pl-4"
-                                                    v-if="
-                                                        state.errors.hasOwnProperty(
-                                                            `products.${ii}.name`
-                                                        )
-                                                    "
-                                                    >{{
-                                                        state.errors[
-                                                            `products.${ii}.name`
-                                                        ][0].replace(
-                                                            `products.${ii}.name `,
-                                                            ""
-                                                        )
-                                                    }}</span
-                                                >
-                                            </div>
-                                        </td>
-                                        
-                                        <td class="">
-                                            <div
-                                                class="flex items-center flex-col gap-1"
-                                            >
-                                                <input
-                                                    type="number"
-                                                    class="w-full h-40px px-1 text-sm bg-transparent"
-                                                    placeholder="0"
-                                                    v-model="product.quantity"
-                                                    required
-                                                    :disabled="
-                                                        group.manufacture !=
-                                                        null
-                                                    "
-                                                />
-                                                <span
-                                                    class="text-xs text-red-500 text-left w-full block pl-4"
-                                                    v-if="
-                                                        state.errors.hasOwnProperty(
-                                                            `products.${ii}.quantity`
-                                                        )
-                                                    "
-                                                    >{{
-                                                        state.errors[
-                                                            `products.${ii}.quantity`
-                                                        ][0].replace(
-                                                            `products.${ii}.quantity `,
-                                                            ""
-                                                        )
-                                                    }}</span
-                                                >
-                                            </div>
-                                        </td>
-                                        <td class="">
-                                            <div
-                                                class="flex items-center flex-col gap-1"
-                                            >
-                                                <input
-                                                    type="number"
-                                                    class="w-full h-40px px-1 text-sm bg-transparent"
-                                                    placeholder="0"
-                                                    v-model="product.price"
-                                                    required
-                                                    :disabled="
-                                                        group.manufacture !=
-                                                        null
-                                                    "
-                                                />
-                                                <span
-                                                    class="text-xs text-red-500 text-left w-full block pl-4"
-                                                    v-if="
-                                                        state.errors.hasOwnProperty(
-                                                            `products.${ii}.price`
-                                                        )
-                                                    "
-                                                    >{{
-                                                        state.errors[
-                                                            `products.${ii}.price`
-                                                        ][0].replace(
-                                                            `products.${ii}.price `,
-                                                            ""
-                                                        )
-                                                    }}</span
-                                                >
-                                            </div>
-                                        </td>
-                                        <td class="">
-                                            <div
-                                                class="flex items-center flex-col gap-1"
-                                            >
-                                                <input
-                                                    type="text"
-                                                    class="w-full h-40px px-1 text-sm bg-transparent"
-                                                    placeholder="0"
-                                                    disabled
-                                                    :value="
-                                                        product.total_price
-                                                            ? nom(
-                                                                  product.total_price
-                                                              )
-                                                            : null
-                                                    "
-                                                />
-                                                <span
-                                                    class="text-xs text-red-500 text-left w-full block pl-4"
-                                                    v-if="
-                                                        state.errors.hasOwnProperty(
-                                                            `products.${ii}.total_price`
-                                                        )
-                                                    "
-                                                    >{{
-                                                        state.errors[
-                                                            `products.${ii}.total_price`
-                                                        ][0].replace(
-                                                            `products.${ii}.total_price `,
-                                                            ""
-                                                        )
-                                                    }}</span
-                                                >
-                                            </div>
-                                        </td>
-                                        <td class="">
-                                            <div
-                                                class="flex items-center flex-col gap-1"
-                                            >
-                                                <textarea
-                                                    class="w-full h-full px-1 text-sm h-40px pt-10px bg-transparent"
-                                                    placeholder="Product Description"
-                                                    v-model="
-                                                        product.description
-                                                    "
-                                                    :disabled="
-                                                        group.manufacture !=
-                                                        null
-                                                    "
-                                                ></textarea>
+                                                        </div>
+                                                    </td>
 
-                                                <span
-                                                    class="text-xs text-red-500 text-left w-full block pl-4"
+                                                    <td class="">
+                                                        <div
+                                                            class="flex items-center flex-col gap-1"
+                                                        >
+                                                            <INumber
+                                                                class="w-full h-40px px-1 text-sm bg-transparent"
+                                                                placeholder="0"
+                                                                v-model="
+                                                                    product.quantity
+                                                                "
+                                                                required
+                                                                :disabled="
+                                                                    group1.manufacture !=
+                                                                    null
+                                                                "
+                                                            />
+                                                            <span
+                                                                class="text-xs text-red-500 text-left w-full block pl-4"
+                                                                v-if="
+                                                                    state.errors.hasOwnProperty(
+                                                                        `products.${ii}.quantity`
+                                                                    )
+                                                                "
+                                                                >{{
+                                                                    state.errors[
+                                                                        `products.${ii}.quantity`
+                                                                    ][0].replace(
+                                                                        `products.${ii}.quantity `,
+                                                                        ""
+                                                                    )
+                                                                }}</span
+                                                            >
+                                                        </div>
+                                                    </td>
+                                                    <td class="">
+                                                        <div
+                                                            class="flex items-center flex-col gap-1"
+                                                        >
+                                                            <INumber
+                                                                class="w-full h-40px px-1 text-sm bg-transparent"
+                                                                placeholder="0"
+                                                                v-model="
+                                                                    product.price
+                                                                "
+                                                                required
+                                                                :disabled="
+                                                                    group1.manufacture !=
+                                                                    null
+                                                                "
+                                                                v-if="
+                                                                    user.position !==
+                                                                    'delivery'
+                                                                "
+                                                            />
+                                                            <INumber
+                                                                class="w-full h-40px px-1 text-sm bg-transparent"
+                                                                placeholder="0"
+                                                                required
+                                                                :disabled="
+                                                                    group1.manufacture !=
+                                                                    null
+                                                                "
+                                                                v-else
+                                                            />
+                                                            <span
+                                                                class="text-xs text-red-500 text-left w-full block pl-4"
+                                                                v-if="
+                                                                    state.errors.hasOwnProperty(
+                                                                        `products.${ii}.price`
+                                                                    )
+                                                                "
+                                                                >{{
+                                                                    state.errors[
+                                                                        `products.${ii}.price`
+                                                                    ][0].replace(
+                                                                        `products.${ii}.price `,
+                                                                        ""
+                                                                    )
+                                                                }}</span
+                                                            >
+                                                        </div>
+                                                    </td>
+                                                    <td class="">
+                                                        <div
+                                                            class="flex items-center flex-col gap-1"
+                                                        >
+                                                            <input
+                                                                type="text"
+                                                                class="w-full h-40px px-1 text-sm bg-transparent"
+                                                                placeholder="0"
+                                                                disabled
+                                                                :value="
+                                                                    product.total_price
+                                                                        ? nom(
+                                                                              product.total_price
+                                                                          )
+                                                                        : null
+                                                                "
+                                                                v-if="
+                                                                    user.position !==
+                                                                    'delivery'
+                                                                "
+                                                            />
+                                                            <INumber
+                                                                class="w-full h-40px px-1 text-sm bg-transparent"
+                                                                placeholder="0"
+                                                                required
+                                                                :disabled="
+                                                                    group1.manufacture !=
+                                                                    null
+                                                                "
+                                                                v-else
+                                                            />
+                                                            <span
+                                                                class="text-xs text-red-500 text-left w-full block pl-4"
+                                                                v-if="
+                                                                    state.errors.hasOwnProperty(
+                                                                        `products.${ii}.total_price`
+                                                                    )
+                                                                "
+                                                                >{{
+                                                                    state.errors[
+                                                                        `products.${ii}.total_price`
+                                                                    ][0].replace(
+                                                                        `products.${ii}.total_price `,
+                                                                        ""
+                                                                    )
+                                                                }}</span
+                                                            >
+                                                        </div>
+                                                    </td>
+                                                    <td class="">
+                                                        <div
+                                                            class="flex items-center flex-col gap-1"
+                                                        >
+                                                            <textarea
+                                                                class="w-full h-full px-1 text-sm h-40px pt-10px bg-transparent"
+                                                                placeholder="Product Description"
+                                                                v-model="
+                                                                    product.description
+                                                                "
+                                                                :disabled="
+                                                                    group1.manufacture !=
+                                                                    null
+                                                                "
+                                                            ></textarea>
+
+                                                            <span
+                                                                class="text-xs text-red-500 text-left w-full block pl-4"
+                                                                v-if="
+                                                                    state.errors.hasOwnProperty(
+                                                                        `products.${ii}.description`
+                                                                    )
+                                                                "
+                                                                >{{
+                                                                    state.errors[
+                                                                        `products.${ii}.description`
+                                                                    ][0].replace(
+                                                                        `products.${ii}.description `,
+                                                                        ""
+                                                                    )
+                                                                }}</span
+                                                            >
+                                                        </div>
+                                                    </td>
+                                                    <!-- <td class="p-1 input">
+                                                        <div
+                                                            class="px-1 flex justify-center w-full"
+                                                        >
+                                                            <input
+                                                                type="checkbox"
+                                                                value="production"
+                                                                v-model="
+                                                                    product.is_production
+                                                                "
+                                                                :disabled="
+                                                                    group1.manufacture !=
+                                                                    null
+                                                                "
+                                                            />
+                                                        </div>
+                                                    </td> -->
+                                                    <td class="p-1 input">
+                                                        <button
+                                                            type="button"
+                                                            v-if="
+                                                                group1.products
+                                                                    .length >
+                                                                    1 &&
+                                                                group1.manufacture ==
+                                                                    null &&
+                                                                state.status ==
+                                                                    'open' &&
+                                                                user.position !==
+                                                                    'delivery' &&
+                                                                user.position !==
+                                                                    'finance'
+                                                            "
+                                                            class="text-xl px-2 h-35px text-[#667085] hover:bg-gray-100 rounded"
+                                                            @click="
+                                                                setDelete(
+                                                                    'product',
+                                                                    state.products_group.findIndex(
+                                                                        (e) =>
+                                                                            e.job_number ==
+                                                                            group1.job_number
+                                                                    ),
+                                                                    ii
+                                                                )
+                                                            "
+                                                        >
+                                                            <i
+                                                                class="ri-delete-bin-line"
+                                                            ></i>
+                                                        </button>
+                                                    </td>
+                                                </tr>
+                                            </tbody>
+                                            <tfoot>
+                                                <tr
                                                     v-if="
-                                                        state.errors.hasOwnProperty(
-                                                            `products.${ii}.description`
-                                                        )
-                                                    "
-                                                    >{{
-                                                        state.errors[
-                                                            `products.${ii}.description`
-                                                        ][0].replace(
-                                                            `products.${ii}.description `,
-                                                            ""
-                                                        )
-                                                    }}</span
-                                                >
-                                            </div>
-                                        </td>
-                                        <td class="p-1 input">
-                                            <div
-                                                class="px-1 flex justify-center w-full"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    value="production"
-                                                    v-model="
-                                                        product.is_production
-                                                    "
-                                                    :disabled="
-                                                        group.manufacture !=
-                                                        null
-                                                    "
-                                                />
-                                            </div>
-                                        </td>
-                                        <td class="p-1 input">
-                                            <button
-                                                type="button"
-                                                v-if="
-                                                    group.products.length > 1 &&
-                                                    group.manufacture == null && state.status == 'open'
-                                                    && user.position !== 'delivery'
-                                                        && user.position !== 'finance'
-                                                "
-                                                class="text-xl px-2 h-35px text-[#667085] hover:bg-gray-100 rounded"
-                                                @click="
-                                                    setDelete('product', i, ii)
-                                                "
-                                            >
-                                                <i
-                                                    class="ri-delete-bin-line"
-                                                ></i>
-                                            </button>
-                                        </td>
-                                    </tr>
-                                </tbody>
-                                <tfoot>
-                                    <tr v-if="group.sent_to_del_at == null">
-                                        <td colspan="8">
-                                            <div class="flex border-t">
-                                                <button
-                                                    @click="() => sendToDel(i)"
-                                                    type="button"
-                                                    class="flex-1 text-sm px-4 py-2 bg-red-500 text-white hover:bg-red-600 items-center justify-center flex gap-4 w-full rounded-bl-lg"
-                                                    v-if="group.id"
-                                                >
-                                                    <i
-                                                        class="ri-share-forward-2-line text-xl"
-                                                    ></i>
-                                                    <strong
-                                                        >Send to
-                                                        Delivery</strong
-                                                    >
-                                                </button>
-                                                <div class="flex-1" v-else></div>
-                                                <div class="flex-1"></div>
-                                                <div class="flex-1"></div>
-                                                <button
-                                                    type="button"
-                                                    class="flex-1 text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-br-lg hidon"
-                                                    @click="
-                                                        () =>
-                                                            group.products.push(
-                                                                {
-                                                                    name: '',
-                                                                    quantity:
-                                                                        '',
-                                                                    description:
-                                                                        '',
-                                                                    price: null,
-                                                                    total_price:
-                                                                        null,
-                                                                    is_production: true,
-                                                                }
-                                                            )
+                                                        group1.sent_to_del_at ==
+                                                            null &&
+                                                        user.position !==
+                                                            'delivery' &&
+                                                        user.position !==
+                                                            'finance'
                                                     "
                                                 >
-                                                    <i
-                                                        class="ri-add-box-line text-xl"
-                                                    ></i>
-                                                    <span> Add More Item </span>
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                </tfoot>
-                            </table>
+                                                    <td colspan="8">
+                                                        <div
+                                                            class="flex border-t"
+                                                        >
+                                                            
+                                                            <button
+                                                                type="button"
+                                                                class="flex-1 text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full hidon"
+                                                                @click="
+                                                                    () =>
+                                                                        group1.products.push(
+                                                                            {
+                                                                                name: '',
+                                                                                quantity:
+                                                                                    '',
+                                                                                description:
+                                                                                    '',
+                                                                                price: null,
+                                                                                total_price:
+                                                                                    null,
+                                                                                is_production: true,
+                                                                            }
+                                                                        )
+                                                                "
+                                                            >
+                                                                <i
+                                                                    class="ri-add-box-line text-xl"
+                                                                ></i>
+                                                                <span>
+                                                                    Add More
+                                                                    Item
+                                                                </span>
+                                                            </button>
+                                                            <!-- <button
+                                                                @click="
+                                                                    () =>
+                                                                        sendToDel(
+                                                                            i
+                                                                        )
+                                                                "
+                                                                type="button"
+                                                                class=" text-sm px-4 py-2 bg-red-500 text-white hover:bg-red-600 items-center justify-center flex gap-4"
+                                                                v-if="group1.id"
+                                                                >
+                                                                <i
+                                                                    class="ri-share-forward-2-line text-xl"
+                                                                ></i>
+                                                                <strong
+                                                                    >Send to
+                                                                    Delivery</strong
+                                                                >
+                                                            </button> -->
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    </div>
+                                </div>
+                            </template>
                         </div>
-                    </div>
-                </template> -->
-                <div class="h-4"></div>
-                <table class="ml-auto" v-if="user.position !== 'delivery'">
+                    </template>
+                </template>
+            </div>
+
+            <div
+                class="fixed bottom-0  bg-white border-t border-gray-200 py-4 px-10 flex justify-between items-center transition-all duration-200"
+                :class="layoutData?.menu_open ? 'left-279px w-[calc(100vw-279px)]' : 'left-0 w-full'"
+            >
+                <table v-if="user.position !== 'delivery'">
                     <tr class="my-2">
                         <td class="pr-8 font-bold text-[#667085] text-right">
                             Total :
@@ -2191,7 +1866,7 @@ watch(
                         </td>
                     </tr>
                 </table>
-                <div class="flex justify-end gap-4 mt-8">
+                <div class="flex justify-end gap-4">
                     <button
                         class="h-45px px-4 border bg-white rounded-lg gap-2 shadow text-gray-700 hover:shadow-sm hover:bg-gray-50 flex items-center"
                         type="button"

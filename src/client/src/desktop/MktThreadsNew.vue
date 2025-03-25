@@ -12,7 +12,6 @@ import {
     getThreads,
     nom,
     goto,
-    ASSETSURL
 } from "../services/service";
 import { useRoute, useRouter } from "vue-router";
 import { loading } from "../services/router";
@@ -56,15 +55,7 @@ const state = reactive({
     is_plan: true,
     inv_tab: 0,
     mkt_tab:0,
-    back:null,
-
-
-    do_deadline: null,
-    design_deadline: null,
-    bast_deadline: null,
-    gr_deadline: null,
-
-    cancel_files: []
+    back:null
 });
 const formatMetaData = (key, value) => {
     if (key.includes('amount') || key.includes('price')) {
@@ -81,17 +72,6 @@ const notiffilter = [
     { title: "Invoice Progress", value: "invoice" },
     { title: "Logistics Update", value: "logistic" },
 ];
-const notiffilter1 = [
-    { title: "All", value: "deliveryall" },
-    { title: "Surat Jalan Action", value: "do" },
-    { title: "Logistics Update", value: "logistic" },
-];
-const notiffilter2 = [
-    { title: "All", value: "designall" },
-    { title: "Design Process", value: "design" },
-    { title: "BAST", value: "bast" },
-    { title: "GR/TPB", value: "gr" },
-];
 const setnotiffilter = (name) => {
     // loading()
     state.current_tab = name;
@@ -105,14 +85,9 @@ const resetForm = () => {
     state.production_deadline = null;
     state.po_deadline = null;
 
-    
     state.note = null;
     state.invoice_status = null;
     state.invoice_pic = null;
-
-    state.do_deadline = null;
-    state.design_deadline = null;
-    state.bast_deadline = null;
 };
 
 watch(
@@ -129,43 +104,10 @@ watch(
     }
 );
 
-
-const getFileType = (filename) => {
-    const extension = filename.split(".").pop().toLowerCase();
-    switch (extension) {
-        case "jpg":
-        case "jpeg":
-            return "JPEG Image";
-        case "png":
-            return "PNG Image";
-        case "pdf":
-            return "PDF Document";
-        default:
-            return "Unknown Type";
-    }
-};
-
-
 const submit = () => {
     loading();
-    let thread_type = state.thread_type;
-    if(state.bast_deadline){
-        thread_type = "bast"
-    }
-    if(state.gr_deadline){
-        thread_type = "gr"
-    }
-    if(state.do_deadline){
-        thread_type = "do"
-    }
-    if(state.design_deadline){
-        thread_type = "design"
-    }
-    if(state.cancel_files.length > 0){
-        thread_type = "cancel"
-    }
     let data = {
-        thread_type: thread_type,
+        thread_type: state.thread_type,
         project: state.project_id,
         invoice_date: state.invoice_date,
         invoice_number: state.invoice_number,
@@ -177,19 +119,11 @@ const submit = () => {
         delivery_deadline: state.delivery_deadline,
         production_deadline: state.production_deadline,
         po_deadline: state.po_deadline,
-
+    
         note: state.note,
         delete_invoice: state.inv_tab == 2 ? true : false,
-
-        do_deadline: state.do_deadline,
-        design_deadline: state.design_deadline,
-        bast_deadline: state.bast_deadline,
-        gr_deadline: state.gr_deadline,
-
     };
-    if(state.cancel_files.length > 0){
-        data.cancel_files = state.cancel_files
-    }
+
     Object.keys(data).forEach((key) => {
         if (!data[key]) {
             delete data[key];
@@ -212,9 +146,7 @@ const thread_type = (position) => {
         case "marketing":
             return "po";
         case "delivery":
-            return "do";
-        case "design":
-            return "design";
+            return "logistic";
     }
 };
 const loadData = () => {
@@ -232,23 +164,23 @@ const loadData = () => {
                 ? JSON.parse(data?.deadline_meta)
                 : null;
             state.thread_type = thread_type(user.position);
-            // if (user.position == "marketing" && data?.client_po_number == null)
-            //     state.showUpdateButton = true;
-            // if (
-            //     user.position === "delivery" &&
-            //     data?.is_real == 1 &&
-            //     ((data?.is_po_deposit && data?.sent_to_del_at !== null) ||
-            //         (!data?.is_po_deposit && data?.sent_to_del_at === null))
-            // ) {
-            //     state.showUpdateButton = true;
-            // }
+            if (user.position == "marketing" && data?.client_po_number == null)
+                state.showUpdateButton = true;
+            if (
+                user.position === "delivery" &&
+                data?.is_real == 1 &&
+                ((data?.is_po_deposit && data?.sent_to_del_at !== null) ||
+                    (!data?.is_po_deposit && data?.sent_to_del_at === null))
+            ) {
+                state.showUpdateButton = true;
+            }
 
-            // if (
-            //     user.position == "finance" &&
-            //     ((data?.is_real == 0 && data?.is_po_deposit) ||
-            //         (data?.is_real == 1 && !data?.is_po_deposit))
-            // )
-            //     state.showUpdateButton = true;
+            if (
+                user.position == "finance" &&
+                ((data?.is_real == 0 && data?.is_po_deposit) ||
+                    (data?.is_real == 1 && !data?.is_po_deposit))
+            )
+                state.showUpdateButton = true;
 
             state.invoiced_amount = state.data?.remaining_amount ?? state.data?.total_price
         }
@@ -263,8 +195,6 @@ onMounted(() => {
     loading();
     state.id = route.params.id;
     state.back = route.query?.back;
-    if(user.position == "delivery") state.current_tab = 'deliveryall'
-    if(user.position == "design") state.current_tab = 'designall'
     loadData();
 });
 </script>
@@ -315,45 +245,6 @@ onMounted(() => {
                         >
                             <div
                                 class="flex h-10 w-full bg-gray-50 rounded-md mb-2"
-                                v-if="user.position == 'design'"
-                            >
-                                <div
-                                    class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer"
-                                    :class="
-                                        state.mkt_tab == 0
-                                            ? 'text-red-500'
-                                            : 'text-gray-400'
-                                    "
-                                    @click="() => (state.mkt_tab = 0)"
-                                >
-                                    Set Design Deadline
-                                </div>
-                                <div
-                                    class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer"
-                                    :class="
-                                        state.mkt_tab == 1
-                                            ? 'text-red-500'
-                                            : 'text-gray-400'
-                                    "
-                                    @click="() => (state.mkt_tab = 1)"
-                                >
-                                    Set BAST Deadline
-                                </div>
-                                <div
-                                    class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer"
-                                    v-if="state.data?.documents?.gr"
-                                    :class="
-                                        state.mkt_tab == 2
-                                            ? 'text-red-500'
-                                            : 'text-gray-400'
-                                    "
-                                    @click="() => (state.mkt_tab = 2)"
-                                >
-                                    Set GR/TPB Deadline
-                                </div>
-                            </div>
-                            <div
-                                class="flex h-10 w-full bg-gray-50 rounded-md mb-2"
                                 v-if="user.position == 'marketing'"
                             >
                                 <div
@@ -393,19 +284,19 @@ onMounted(() => {
                             <div
                                 class="flex h-10 w-full bg-gray-50 rounded-md mb-2"
                                 v-if="user.position == 'delivery'"
-                                >
+                            >
                                 <div
-                                    class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer text-red-500"
-                                >
-                                    <!-- :class="
+                                    class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer"
+                                    :class="
                                         state.is_plan
                                             ? 'text-red-500'
                                             : 'text-gray-400'
-                                    " -->
-                                <!-- @click="() => (state.is_plan = true)" -->
-                                    Set Surat Jalan Follow Up
+                                    "
+                                    @click="() => (state.is_plan = true)"
+                                >
+                                    Set Production Deadline
                                 </div>
-                                <!-- <div
+                                <div
                                     class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer"
                                     :class="
                                         !state.is_plan
@@ -415,7 +306,7 @@ onMounted(() => {
                                     @click="() => (state.is_plan = false)"
                                 >
                                     Set Delivery Deadline
-                                </div> -->
+                                </div>
                             </div>
                             <div
                                 class="flex h-10 w-full bg-gray-50 rounded-md mb-2"
@@ -457,89 +348,6 @@ onMounted(() => {
                             </div>
                             <div
                                 class="flex gap-4 w-full"
-                                v-if="user.position == 'design'"
-                            >
-                                <label
-                                    class="flex flex-col gap-2 flex-1"
-                                    v-if="state.mkt_tab == 0"
-                                >
-                                    <span class="text-sm text-left"
-                                        >Design Progress</span
-                                    >
-                                    <div
-                                        class="w-full border rounded-lg bg-white h-45px relative flex items-center"
-                                    >
-                                        <input
-                                            type="date"
-                                            class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 noicon text-14px"
-                                            onfocus="this.showPicker()"
-                                            v-model="state.design_deadline"
-                                            required
-                                        />
-                                        <div
-                                            class="absolute left-4 text-red-500 text-xl"
-                                        >
-                                            <i
-                                                class="ri-calendar-event-line"
-                                            ></i>
-                                        </div>
-                                    </div>
-                                </label>    
-                                <label
-                                    class="flex flex-col gap-2 flex-1"
-                                    v-if="state.mkt_tab == 1"
-                                >
-                                    <span class="text-sm text-left"
-                                        >BAST Progress</span
-                                    >
-                                    <div
-                                        class="w-full border rounded-lg bg-white h-45px relative flex items-center"
-                                    >
-                                        <input
-                                            type="date"
-                                            class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 noicon text-14px"
-                                            onfocus="this.showPicker()"
-                                            v-model="state.bast_deadline"
-                                            required
-                                        />
-                                        <div
-                                            class="absolute left-4 text-red-500 text-xl"
-                                        >
-                                            <i
-                                                class="ri-calendar-event-line"
-                                            ></i>
-                                        </div>
-                                    </div>
-                                </label>    
-                                <label
-                                    class="flex flex-col gap-2 flex-1"
-                                    v-if="state.mkt_tab == 2"
-                                >
-                                    <span class="text-sm text-left"
-                                        >GR/TPB Progress</span
-                                    >
-                                    <div
-                                        class="w-full border rounded-lg bg-white h-45px relative flex items-center"
-                                    >
-                                        <input
-                                            type="date"
-                                            class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 noicon text-14px"
-                                            onfocus="this.showPicker()"
-                                            v-model="state.gr_deadline"
-                                            required
-                                        />
-                                        <div
-                                            class="absolute left-4 text-red-500 text-xl"
-                                        >
-                                            <i
-                                                class="ri-calendar-event-line"
-                                            ></i>
-                                        </div>
-                                    </div>
-                                </label>    
-                            </div>
-                            <div
-                                class="flex gap-4 w-full"
                                 v-if="user.position == 'delivery'"
                             >
                                 <label
@@ -547,7 +355,7 @@ onMounted(() => {
                                     v-if="state.is_plan"
                                 >
                                     <span class="text-sm text-left"
-                                        >Surat Jalan Deadline</span
+                                        >Production Deadline</span
                                     >
                                     <div
                                         class="w-full border rounded-lg bg-white h-45px relative flex items-center"
@@ -556,7 +364,7 @@ onMounted(() => {
                                             type="date"
                                             class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 noicon text-14px"
                                             onfocus="this.showPicker()"
-                                            v-model="state.do_deadline"
+                                            v-model="state.production_deadline"
                                             required
                                         />
                                         <div
@@ -572,17 +380,17 @@ onMounted(() => {
                                             class="text-xs text-red-500"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    'do_deadline'
+                                                    'production_deadline'
                                                 )
                                             "
                                             >{{
                                                 state.errors
-                                                    ?.do_deadline[0]
+                                                    ?.production_deadline[0]
                                             }}</span
                                         >
                                     </div>
                                 </label>
-                                <!-- <label
+                                <label
                                     class="flex flex-col gap-2 flex-1"
                                     v-if="!state.is_plan"
                                 >
@@ -621,7 +429,7 @@ onMounted(() => {
                                             }}</span
                                         >
                                     </div>
-                                </label> -->
+                                </label>
                             </div>
 
                             <div
@@ -755,9 +563,9 @@ onMounted(() => {
                             >
                                 <label class="flex flex-col gap-2 flex-1">
                                     <span class="text-sm text-left"
-                                        >Upload Proof of Cancellation</span
+                                        >Upload Files</span
                                     >
-                                    <Upload :files="state.cancel_files" @update="state.cancel_files = $event" required />
+                                    <Upload :files="[]" @update="console.log" />
                                     
                                     <div class="h-3 flex -mt-1">
                                         <span
@@ -1050,63 +858,9 @@ onMounted(() => {
                                     </div>
                                 </label>
                             </div>
-                            <!-- <div class="flex gap-4 w-full">
-                                <label
-                                    class="flex flex-col gap-2 flex-1"
-                                    v-if="
-                                        user.position !== 'finance' &&
-                                        (
-                                            state.mkt_tab == 0 &&
-                                            user.position === 'marketing'
-                                        )
-                                    "
-                                >
-                                    <span class="text-sm text-left"
-                                        >Alert Setting</span
-                                    >
-                                    <div
-                                        class="w-full border rounded-lg bg-white h-45px relative flex items-center pr-2"
-                                    >
-                                        <select
-                                            required
-                                            class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 noicon text-14px"
-                                            v-model="state.alert_time"
-                                        >
-                                            <option value="">
-                                                Select Alert Setting
-                                            </option>
-                                            <template v-for="n in 30">
-                                                <option :value="n - 1">
-                                                    {{ n - 1 }} days before
-                                                </option>
-                                            </template>
-                                        </select>
-                                        <div
-                                            class="absolute left-4 text-red-500 text-xl"
-                                        >
-                                            <i class="ri-file-user-line"></i>
-                                        </div>
-                                    </div>
-                                    <div class="h-3 flex -mt-1">
-                                        <span
-                                            class="text-xs text-red-500"
-                                            v-if="
-                                                state.errors.hasOwnProperty(
-                                                    'alert_time'
-                                                )
-                                            "
-                                            >{{
-                                                state.errors?.alert_time[0]
-                                            }}</span
-                                        >
-                                    </div>
-                                </label>
-                            </div> -->
 
-                            <label class="flex flex-col gap-2 mt-4">
-                                <span class="text-sm text-left">
-                                    {{ user.position == "delivery" ? "Reason" : user.position == "design" ? "Remark" : "Note" }}
-                                </span>
+                            <label class="flex flex-col gap-2">
+                                <span class="text-sm text-left">Note</span>
                                 <div
                                     class="w-full border rounded-lg bg-white relative flex items-center"
                                 >
@@ -1261,14 +1015,14 @@ onMounted(() => {
                                 >Invoice Status</span
                             >
                             <div
-                                class="text-xs font-medium capitalize mt-1"
+                                class="text-xs font-medium capitalize"
                                 :class="
-                                    state.data?.invoice_status == 'sent'
-                                    ? 'text-green-500'
-                                    : 'text-orange-500'
+                                    state.data?.invoice_status == 'progress'
+                                        ? 'text-orange-500'
+                                        : 'text-green-500'
                                 "
                             >
-                                <span>{{ state.data?.invoice_status == 'new' ? 'Not Yet Processed' : state.data?.invoice_status }}</span>
+                                <span>{{ state.data?.invoice_status }}</span>
                             </div>
                         </div>
                     </div>
@@ -1468,13 +1222,13 @@ onMounted(() => {
                     </div>
                 </div>
             </div>
-            <div class="w-1/2 w-full bg-white rounded-lg shadow p-6 proform" v-if="['finance','marketing'].includes(user.position)">
+            <div class="w-1/2 w-full bg-white rounded-lg shadow p-6 proform">
                 <div class="px-3">
                     <strong class="block mb-4 text-lg text-left"
-                        >Update</strong
+                        >Update History</strong
                     >
                 </div>
-                <div class="px-3 border-b flex gap-3" >
+                <div class="px-3 border-b flex gap-3">
                     <template v-for="(item, i) in notiffilter" :key="i">
                         <div
                             class="py-3 border-b-2 px-1 flex gap-1 items-center -mb-1px cursor-pointer"
@@ -1537,176 +1291,6 @@ onMounted(() => {
                                             ? "PO Action"
                                             : item.type == "invoice"
                                             ? "Invoice Progress"
-                                            : item.type == "cancel"
-                                            ? "Cancel PO"
-                                            : "Logistic Update"
-                                    }}</span
-                                >
-                                <div
-                                    class="text-sm mt-1"
-                                    v-html="
-                                        item.notes?.replace(
-                                            /(?:\r\n|\r|\n)/g,
-                                            '<br>'
-                                        )
-                                    "
-                                ></div>
-                                <div
-                                    class="text-sm mt-1 flex flex-col bg-gray-50 p-2 rounded"
-                                    v-if="item?.meta_data != '{}' && item?.meta_data != null && item?.meta_data != '[]'"
-                                >
-                                    <span
-                                        v-for="item in Object.entries(
-                                            JSON.parse(item?.meta_data ?? '{}')
-                                        )"
-                                        class="text-xs text-gray-500"
-                                        v-if="
-                                            !(
-                                                [
-                                                    'invoiced_amount',
-                                                    'total_price',
-                                                    'remaining_amount',
-                                                ].includes(item[0]) &&
-                                                user.position === 'delivery'
-                                            )
-                                        "
-                                        ><span class="capitalize">{{
-                                            item[0].replace("_", " ")
-                                        }}</span>
-                                        : <span>{{ formatMetaData(item[0], item[1]) }}</span>
-                                        </span
-                                    >
-                                </div>
-
-                                <a
-                                    class="flex p-4 rounded-lg bg-gray-100 relative items-center gap-4 mt-4"
-                                    v-for="(file, index) in JSON.parse(item.files)"
-                                    :href="ASSETSURL+file"
-                                    target="_blank"
-                                    :key="index"
-                                >
-                                    <svg
-                                        height="40"
-                                        viewBox="0 0 58 56"
-                                        fill="none"
-                                        xmlns="http://www.w3.org/2000/svg"
-                                    >
-                                        <path
-                                            d="M49.9372 54.3196H21.7977C18.2657 54.3196 15.4024 51.4563 15.4024 47.9242V8.27305C15.4024 4.741 18.2657 1.8777 21.7977 1.8777H38.8551L56.3326 19.3552V47.9242C56.3326 51.4563 53.4693 54.3196 49.9372 54.3196Z"
-                                            fill="#EEF1F7"
-                                            stroke="#CBD0DC"
-                                            stroke-width="2.55814"
-                                        />
-                                        <rect
-                                            x="0.692871"
-                                            y="24.9014"
-                                            width="38.3721"
-                                            height="22.3837"
-                                            rx="4.47674"
-                                            fill="#D82042"
-                                        />
-                                        <text
-                                            x="18"
-                                            y="42"
-                                            fill="#FFF"
-                                            font-size="14"
-                                            font-family="Arial"
-                                            text-anchor="middle"
-                                        >
-                                            {{ file.split(".").pop().toUpperCase() }}
-                                        </text>
-                                    </svg>
-                                    <div class="flex flex-col">
-                                        <span class="text-sm">
-                                            {{ file.length > 20 ? "..." + file.slice(-20) : file }}
-                                        </span>
-                                        <span class="text-xs text-gray-400">{{
-                                            getFileType(file)
-                                        }}</span>
-                                    </div>
-                                </a>
-                                <!-- <div v-for="img in JSON.parse(item.files)" class="w-4 h-4 bg-black">
-
-                                </div> -->
-                            </div>
-                            <div class="flex flex-col items-end">
-                                <span class="text-xs text-gray-500">{{
-                                    dayjs(item.created_at).format("D MMM YYYY")
-                                }}</span>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-            </div>
-            <div class="w-1/2 w-full bg-white rounded-lg shadow p-6 proform" v-if="['delivery'].includes(user.position)">
-                <div class="px-3">
-                    <strong class="block mb-4 text-lg text-left"
-                        >Update</strong
-                    >
-                </div>
-                <div class="px-3 border-b flex gap-3" >
-                    <template v-for="(item, i) in notiffilter1" :key="i">
-                        <div
-                            class="py-3 border-b-2 px-1 flex gap-1 items-center -mb-1px cursor-pointer"
-                            :class="
-                                state.current_tab == item.value
-                                    ? 'border-[#DF3737]'
-                                    : 'border-transparent'
-                            "
-                            @click="() => setnotiffilter(item.value)"
-                        >
-                            <span
-                                class="text-12px font-inter capitalize"
-                                :class="
-                                    state.current_tab == item.value
-                                        ? 'text-[#DF3737] font-bold'
-                                        : 'text-[#667085]'
-                                "
-                                >{{ item.title }}</span
-                            >
-                            <span
-                                class="text-10px w-18px h-18px rounded-full flex items-center justify-center -mt-2px font-inter"
-                                :class="
-                                    state.current_tab == item.value
-                                        ? 'bg-[#FFD0D0] text-[#DF3737] font-bold'
-                                        : 'bg-[#DFE1E7] text-[#667085]'
-                                "
-                                >{{
-                                    item.value == "deliveryall"
-                                        ? state.progress.filter(
-                                              (x) => ['do', 'logistic'].includes(x.type)
-                                          ).length
-                                        : state.progress.filter(
-                                              (x) => x.type == item.value
-                                          ).length
-                                }}</span
-                            >
-                        </div>
-                    </template>
-                </div>
-                <div class="flex flex-col">
-                    <template
-                        v-for="(item, i) in state.progress.filter((x) =>
-                            state.current_tab == 'deliveryall'
-                                ? ['do', 'logistic'].includes(x.type)
-                                : x.type == state.current_tab
-                        )"
-                        :key="i"
-                    >
-                        <div class="px-3 py-3 border-b flex gap-3">
-                            <div class="flex items-start">
-                                <div
-                                    class="w-40px h-40px bg-[#FFCFCFB2] rounded-full flex items-center justify-center text-[#DF3737]"
-                                >
-                                    <i class="ri-send-plane-line text-xl"></i>
-                                </div>
-                            </div>
-                            <div class="flex flex-col flex-1">
-                                <span
-                                    class="text-xs font-medium text-[#DF3737]"
-                                    >{{
-                                        item.type == "do"
-                                            ? "Surat Jalan Action"
                                             : "Logistic Update"
                                     }}</span
                                 >
@@ -1744,124 +1328,6 @@ onMounted(() => {
                                         </span
                                     >
                                 </div>
-                            </div>
-                            <div class="flex flex-col items-end">
-                                <span class="text-xs text-gray-500">{{
-                                    dayjs(item.created_at).format("D MMM YYYY")
-                                }}</span>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-            </div>
-            <div class="w-1/2 w-full bg-white rounded-lg shadow p-6 proform" v-if="['design'].includes(user.position)">
-                <div class="px-3">
-                    <strong class="block mb-4 text-lg text-left"
-                        >Update</strong
-                    >
-                </div>
-                <div class="px-3 border-b flex gap-3" >
-                    <template v-for="(item, i) in notiffilter2" :key="i">
-                        <div
-                            class="py-3 border-b-2 px-1 flex gap-1 items-center -mb-1px cursor-pointer"
-                            :class="
-                                state.current_tab == item.value
-                                    ? 'border-[#DF3737]'
-                                    : 'border-transparent'
-                            "
-                            @click="() => setnotiffilter(item.value)"
-                        >
-                            <span
-                                class="text-12px font-inter capitalize"
-                                :class="
-                                    state.current_tab == item.value
-                                        ? 'text-[#DF3737] font-bold'
-                                        : 'text-[#667085]'
-                                "
-                                >{{ item.title }}</span
-                            >
-                            <span
-                                class="text-10px w-18px h-18px rounded-full flex items-center justify-center -mt-2px font-inter"
-                                :class="
-                                    state.current_tab == item.value
-                                        ? 'bg-[#FFD0D0] text-[#DF3737] font-bold'
-                                        : 'bg-[#DFE1E7] text-[#667085]'
-                                "
-                                >{{item.value == "designall"
-                                        ? state.progress.filter(
-                                              (x) => ['design', 'bast','gr'].includes(x.type)
-                                          ).length
-                                        : state.progress.filter(
-                                              (x) => x.type == item.value
-                                          ).length
-                                }}</span
-                            >
-                        </div>
-                    </template>
-                </div>
-                <div class="flex flex-col">
-                    <template
-                        v-for="(item, i) in state.progress.filter((x) =>
-                            state.current_tab == 'designall'
-                                ? ['design', 'bast', 'gr'].includes(x.type)
-                                : x.type == state.current_tab
-                        )"
-                        :key="i"
-                    >
-                        <div class="px-3 py-3 border-b flex gap-3">
-                            <div class="flex items-start">
-                                <div
-                                    class="w-40px h-40px bg-[#FFCFCFB2] rounded-full flex items-center justify-center text-[#DF3737]"
-                                >
-                                    <i class="ri-send-plane-line text-xl"></i>
-                                </div>
-                            </div>
-                            <div class="flex flex-col flex-1">
-                                <span
-                                    class="text-xs font-medium text-[#DF3737]"
-                                    >{{
-                                        item.type == "design"
-                                            ? "Design Progress"
-                                            : item.type == "bast"
-                                            ? "BAST Progress"
-                                            : "BR/TPB Action"
-                                    }}</span
-                                >
-                                <div
-                                    class="text-sm mt-1"
-                                    v-html="
-                                        item.notes?.replace(
-                                            /(?:\r\n|\r|\n)/g,
-                                            '<br>'
-                                        )
-                                    "
-                                ></div>
-                                <div
-                                    class="text-sm mt-1 flex flex-col bg-gray-50 p-2 rounded"
-                                >
-                                    <span
-                                        v-for="item in Object.entries(
-                                            JSON.parse(item?.meta_data ?? '{}')
-                                        )"
-                                        class="text-xs text-gray-500"
-                                        v-if="
-                                            !(
-                                                [
-                                                    'invoiced_amount',
-                                                    'total_price',
-                                                    'remaining_amount',
-                                                ].includes(item[0]) &&
-                                                user.position === 'delivery'
-                                            )
-                                        "
-                                        ><span class="capitalize">{{
-                                            item[0].replace("_", " ")
-                                        }}</span>
-                                        : <span>{{ formatMetaData(item[0], item[1]) }}</span>
-                                        </span
-                                    >
-                                </div>
-                               
                             </div>
                             <div class="flex flex-col items-end">
                                 <span class="text-xs text-gray-500">{{

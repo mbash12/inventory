@@ -1,13 +1,15 @@
 <script setup>
 import { reactive, watch } from "vue";
 const emit = defineEmits(["clear", "apply"]);
+import Select1 from "./Select1.vue";
 const props = defineProps({
     show: Boolean,
     status: Array,
     po: Array,
     start_date: String,
     end_date: String,
-    limit: Number
+    limit: Number,
+    client: String,
 });
 const filters = reactive({
     status: [],
@@ -15,6 +17,7 @@ const filters = reactive({
     start_date: null,
     end_date: null,
     limit: 10,
+    client: null,
 });
 const handleSetMulti = (e, type) => {
     if (e.target.checked) {
@@ -43,15 +46,16 @@ watch(props, async () => {
         filters.start_date = props.start_date;
         filters.end_date = props.end_date;
         filters.limit = props.limit;
+        filters.client = props.client;
     }
 });
 const status = [
     { title: "New", value: "new" },
-    { title: "Delivered", value: "delivered" },
+    { title: "Production", value: "production" },
     { title: "Ready To Deliver", value: "ready" },
     { title: "Partial Delivery", value: "partial" },
-    // { title: "Cancel", value: "cancel" },
-    { title: "Production", value: "production" },
+    { title: "Delivered", value: "delivered" },
+    { title: "Cancel", value: "cancel" },
 ];
 const POstatus = [
     { title: "Sudah Ada PO", value: "true" },
@@ -131,6 +135,16 @@ const POstatus = [
                         </div>
                     </div>
 
+                    <hr class="my-3" />
+                    <label class="flex items-center px-4 gap-4 mb-2">
+                        <span class="text-sm w-20 text-left"> Client </span>
+                        <Select1
+                            @select="(e) => (filters.client = e)"
+                            :value="filters.client"
+                            inline
+                            class="flex-1 border rounded text-sm h-8"
+                        />
+                    </label>
                     <hr class="my-3" />
                     <span
                         class="text-left text-sm my-3 pl-4 font-medium text-gray-500"

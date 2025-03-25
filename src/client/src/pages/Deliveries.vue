@@ -24,6 +24,7 @@ const state = reactive({
     limit: 10,
     export: null,
     export_mode: "print",
+    client: null,
 });
 const handleFilter = (e) => {
     state.page = 1;
@@ -33,6 +34,7 @@ const handleFilter = (e) => {
     state.end_date = e.end_date;
     state.limit = e.limit;
     state.filter_open = false;
+    state.client = e.client;
     search();
 };
 const handleClearFilter = () => {
@@ -42,6 +44,7 @@ const handleClearFilter = () => {
     state.end_date = null;
     state.limit = 10;
     state.filter_open = false;
+    state.client = null;
     search();
 };
 
@@ -78,6 +81,7 @@ const search = () => {
         limit: state.limit,
         page: state.page,
         delivery: true,
+        client: state.client
     };
     Object.keys(filter).forEach((key) => {
         if (filter[key] === null || filter[key] === "") {
@@ -90,6 +94,9 @@ const search = () => {
         if (r.code === 200) {
             state.data = r.data;
             state.meta = r.meta;
+        }else{
+            state.data = [];
+            state.meta = {};
         }
     });
 };
@@ -174,12 +181,12 @@ const submit = (e) => {
             >
                 <i class="ri-filter-line"></i>
             </button>
-            <button
+            <!-- <button
                 class="h-9 w-9 flex items-center justify-center text-app-500"
                 @click="prepareExport('print')"
             >
                 <i class="ri-printer-line"></i>
-            </button>
+            </button> -->
             <button
                 class="h-9 w-9 flex items-center justify-center text-app-500"
                 @click="prepareExport('excel')"
@@ -303,15 +310,14 @@ const submit = (e) => {
                                     <div
                                         class="text-xs font-medium capitalize"
                                         :class="
-                                            item.po_deposit_data
-                                                ?.invoice_status == 'sent'
+                                            item?.invoice_status == 'sent'
                                                 ? 'text-green-500'
                                                 : 'text-orange-500'
                                         "
                                     >
                                         <span>{{
-                                            item.po_deposit_data
-                                                ?.invoice_status ?? "progress"
+                                            item
+                                                ?.invoice_status ?? 'Not Yet Processed'
                                         }}</span>
                                     </div>
                                 </div>
@@ -376,6 +382,7 @@ const submit = (e) => {
         :start_date="state.start_date"
         :end_date="state.end_date"
         :limit="state.limit"
+        :client="state.client"
         @hide="state.filter_open = false"
         @apply="handleFilter"
         @clear="handleClearFilter"

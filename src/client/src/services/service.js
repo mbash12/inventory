@@ -8,8 +8,11 @@ export const ASSETSURL = URLL + "/storage/";
 export const isLoggedin = ref(false);
 export const currentUser = reactive({ user: null });
 export const data = reactive({ notifications: 0 });
-export const nom =  (num = 0) => {
-    return num.toString().replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.")
+export const nom = (num = "0") => {
+    if (typeof num !== 'string') {
+        num = num.toString();
+    }
+    return num.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
 }
 import router from "./router"
 export const goto = (link) => {
@@ -118,6 +121,11 @@ export const getPodeposit = async (id) => await api("getPodeposit", { route: "/"
 export const createPodeposit = async (data) => await api("createPodeposit", { body: data });
 export const updatePodeposit = async (id, data) => await api("updatePodeposit", { route: "/" + id, body: data });
 export const deletePodeposit = async (id) => await api("deletePodeposit", { route: "/" + id });
+export const getProjectTodo = async (filters) => await api("getProjectTodo", { params: filters });
+export const cancelPodeposit = async (id) => await api("updatePodeposit", { route: "/" + id, body: JSON.stringify({
+    status: "cancel"
+}) });
+
 export const projectDelivery = async (id, data) => await api("projectDelivery", { route: "/" + id, body: data });
 export const getSnippet = async (id, data) => await api("getSnippet", { route: "/" + id, body: data });
 export const getUserList = async (filters) => await api("getUserList", { params: filters });
@@ -152,7 +160,7 @@ export const createThreads = async (id, data) => await api("createThreads", { bo
 export const getFollowup = async (id) => await api("getFollowup", { route: "/" + id });
 export const createFollowup = async (id, data) => await api("createFollowup", { route: "/" + id, body: data });
 export const updateFollowup = async (id, data) => await api("updateFollowup", { route: "/" + id, body: data });
-export const getReport = async (year) => await api("getReport", { params: {dates:year} });
+export const getReport = async (year) => await api("getReport", { params: {year:year} });
 
 
 export const sortByProperty = (arr, property, direction = 'asc') =>

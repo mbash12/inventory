@@ -17,7 +17,8 @@ class Thread extends Model
         'notes',
         'meta_data',
         'reminder',
-        'deadline'
+        'deadline',
+        'files'
     ];
     
     protected $casts = [

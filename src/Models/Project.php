@@ -44,6 +44,15 @@ class Project extends Model
         'invoices',
         'invoice_status',
         'invoice_pic',
+        'project_type',
+        'bast_files',
+        'gr_files',
+        'do_files',
+        'documents',
+        'do_deadline',
+        'bast_deadline',
+        'design_deadline',
+        'gr_deadline',
     ];
 
     protected $casts = [

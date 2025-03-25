@@ -93,10 +93,12 @@ class PoDepositController extends Controller
     //         ]);
     //     }
     // }
-    private function createProject($request, $podeposit, $real = false)
+    private function createProject($request, $podeposit, $real = false, $is_po_deposit)
     {
+        
         $list = $request->po_deposits;
         if ($real) $list = $request->products_group;
+        
         foreach ($list as $key => $projectData) {
             if ($real) {
                 $deposit = Project::where('client_po_number', $projectData['client_po_number'])->where('is_po_deposit', true)->where('is_real', false)->first();
@@ -107,21 +109,40 @@ class PoDepositController extends Controller
                 $deposit_id = null;
             }
             $project = new Project();
-            $project->job_number = $projectData['job_number'];
-            $project->client_po_number = $projectData['client_po_number'];
-            $project->client_po_date = $projectData['client_po_date'] ?? $deposit->client_po_date;
-            $project->client_pic_name = $real ? $podeposit->client_pic_name : $projectData['client_pic_name'];
-            $project->client_company = $podeposit->client_company;
-            $project->pic_name = $podeposit->pic_name;
-            $project->total_price = $projectData['total_price'];
-            $project->remaining_amount = $projectData['total_price'];
-            $project->po_deposit = $podeposit->id;
-            $project->is_po_deposit = true;
-            $project->is_real = $real;
-            $project->deposit_id = $deposit_id ?? null;
-            $project->status = $projectData['status'] ?? 'new';
+
             $project->title = $projectData['title'] ?? null;
+            $project->job_number = $projectData['job_number'];
+            $project->client_po_date = $projectData['client_po_date'] ?? $deposit->client_po_date;
+            $project->client_po_number = $projectData['client_po_number'];
+            $project->client_pic_name = $real ? $podeposit->client_pic_name : $projectData['client_pic_name'];
+            $project->status = $projectData['status'] ?? 'new';
+            $project->invoice_status = $projectData['invoice_status'] ?? 'new';
+
+
+            $project->pic_name = $podeposit->pic_name;
+            $project->client_company = $podeposit->client_company;
+            $project->po_deposit = $podeposit->id;
+            $project->is_po_deposit = $is_po_deposit;
+            $project->is_real = $real;
             $project->sent_to_del_at = $projectData['sent_to_del_at'] ?? null;
+            
+            $project->total_price = $projectData['total_price'] ?? null;
+            if($is_po_deposit){
+                $project->invoiced_amount = $projectData['invoiced_amount'] ?? 0;
+                $project->remaining_amount = $projectData['total_price'] - ($projectData['invoiced_amount'] ?? 0);
+            }
+
+            $project->deposit_id = $deposit_id ?? null;
+
+
+
+
+            $project->project_type = $projectData['project_type'] ?? 'gimmick';
+            $project->bast_files = $projectData['bast_files'] ?? null;
+            $project->gr_files = $projectData['gr_files'] ?? null;
+            $project->do_files = $projectData['do_files'] ?? null;
+
+            $project->documents = json_encode($projectData['documents']) ?? null;
             $project->save();
 
             $products = [];
@@ -132,7 +153,7 @@ class PoDepositController extends Controller
             $productss = $project->products_data()->saveMany($products);
         }
     }
-    private function updateProject($request, $podeposit, $real = false)
+    private function updateProject($request, $podeposit, $real = false, $is_po_deposit, $status)
     {
         $existingProjects = $podeposit->projects_data()->get();
         $list = $request->po_deposits;
@@ -150,22 +171,43 @@ class PoDepositController extends Controller
             } else {
                 $deposit_id = null;
             }
-            $project->job_number =  $projectData['job_number'];
-            $project->client_po_number = $projectData['client_po_number'];
-            $project->client_po_date = $projectData['client_po_date'] ?? $deposit->client_po_date;
-            $project->client_pic_name = $real ? $podeposit->client_pic_name : $projectData['client_pic_name'];
-            $project->client_company = $podeposit->client_company;
-            $project->pic_name = $podeposit->pic_name;
-            $project->total_price = $projectData['total_price'];
-            $project->invoiced_amount = $projectData['invoiced_amount'] ?? 0;
-            $project->remaining_amount = $projectData['total_price'] - ($projectData['invoiced_amount'] ?? 0);
-            $project->po_deposit = $podeposit->id;
-            $project->is_po_deposit = true;
-            $project->status = $projectData['status'] ?? 'new';
-            $project->is_real = $real;
-            $project->deposit_id = $deposit_id ?? null;
             $project->title = $projectData['title'] ?? null;
+            $project->job_number =  $projectData['job_number'];
+            $project->client_po_date = $projectData['client_po_date'] ?? $deposit->client_po_date;
+            $project->client_po_number = $projectData['client_po_number'];
+            $project->client_pic_name = $real ? $podeposit->client_pic_name : $projectData['client_pic_name'];
+            
+            if($status == 'cancel'){
+                $project->status = 'cancel';
+            }else{
+                $project->status = $projectData['status'] ?? 'new';
+            }
+
+
+            $project->pic_name = $podeposit->pic_name;
+            $project->client_company = $podeposit->client_company;
+            $project->po_deposit = $podeposit->id;
+            $project->is_po_deposit = $is_po_deposit;
+            $project->is_real = $real;
             $project->sent_to_del_at = $projectData['sent_to_del_at'] ?? null;
+            $project->total_price = $projectData['total_price'] ?? null;
+            if($is_po_deposit){
+                $project->invoiced_amount = $projectData['invoiced_amount'] ?? 0;
+                $project->remaining_amount = $projectData['total_price'] - ($projectData['invoiced_amount'] ?? 0);
+            }
+
+            $project->deposit_id = $deposit_id ?? null;
+            $project->invoice_status = $projectData['invoice_status'] ?? 'new';
+
+
+
+            $project->project_type = $projectData['project_type'] ?? 'gimmick';
+            $project->bast_files = $projectData['bast_files'] ?? null;
+            $project->gr_files = $projectData['gr_files'] ?? null;
+            $project->do_files = $projectData['do_files'] ?? null;
+
+            $project->documents = json_encode($projectData['documents']) ?? null;
+            
             $project->save();
 
 
@@ -247,6 +289,7 @@ class PoDepositController extends Controller
     }
     public function store(Request $request)
     {
+        // return response()->json(['code' => 404, 'data' => json_encode($request->all())]);
         $rules = [
             'job_number' => 'required|unique:po_deposits',
             'pic_name' => 'string',
@@ -254,9 +297,9 @@ class PoDepositController extends Controller
             'client_po_date' => 'nullable|date',
             'client_company' => 'required|string',
             'client_pic_name' => 'required|string',
-            'budget' => 'required',
-            'expense' => 'required',
-            'balance' => 'required',
+            // 'budget' => 'required',
+            // 'expense' => 'required',
+            // 'balance' => 'required',
         ];
         $validator = Validator::make($request->all(), $rules);
         if ($validator->fails()) {
@@ -266,43 +309,53 @@ class PoDepositController extends Controller
             ]);
         }
 
-        try {
+        // try {
             $purchase_orders = [];
-            foreach ($request->po_deposits as $key => $po) {
-                array_push($purchase_orders, [
-                    "client_po_number" => $po['client_po_number'],
-                    "client_po_date" => $po['client_po_date'],
-                    "client_pic_name" => $po['client_pic_name'],
-                    "total_price" => $po['total_price']
-                ]);
+            if($request->is_po_deposit){
+                foreach ($request->po_deposits as $key => $po) {
+                    array_push($purchase_orders, [
+                        "client_po_number" => $po['client_po_number'],
+                        "client_po_date" => $po['client_po_date'],
+                        "client_pic_name" => $po['client_pic_name'],
+                        "total_price" => $po['total_price']
+                    ]);
+                }
             }
+            
             $podeposit = PoDeposit::create([
                 "job_number" => $request->job_number,
-                "pic_name" => $request->pic_name,
-                "client_po_number" => $request->client_po_number,
                 "client_po_date" => $request->client_po_date,
+                "client_po_number" => $request->client_po_number,
                 "client_company" => $request->client_company,
                 "client_pic_name" => $request->client_pic_name,
-                "purchase_ordres" => json_encode($purchase_orders),
-                "is_po_deposit" => true,
-                "budget" => $request->budget,
-                "expense" => $request->expense,
-                "balance" => $request->balance,
+                "pic_name" => $request->pic_name,
                 "status" => 'open',
+                "purchase_ordres" => json_encode($purchase_orders),
+                "invoices" => null,
+                "is_po_deposit" => $request->is_po_deposit,
+                "closed_at" => null,
+                "budget" => $request->budget ?? null,
+                "expense" => $request->expense ?? null,
+                "balance" => $request->balance ?? null,
+                "title" => $request->title ?? null,
+                "total_price" => $request->total_price ?? null,
+                "invoice_status" => $request->invoice_status ?? "new"
             ]);
-
-            $this->createProject($request, $podeposit, false);
-            $this->createProject($request, $podeposit, true);
-
-            notify('New PO Deposit Created', 'PO Deposit #' . $podeposit['job_number'], 'marketing', json_encode(["po_deposit" => $podeposit]), 'deposit');
+            
+            $this->createProject($request, $podeposit, true, $request->is_po_deposit);
+            
+            if ($request->is_po_deposit) {
+                $this->createProject($request, $podeposit, false, true);
+                notify('New PO Deposit Created', 'PO Deposit #' . $podeposit['job_number'], 'marketing', json_encode(["po_deposit" => $podeposit]), 'deposit');
+            }
 
             return response()->json(['code' => 200, 'data' => $podeposit]);
-        } catch (\Throwable $th) {
-            return response()->json([
-                'code' => 422,
-                'errors' => $th
-            ]);
-        }
+        // } catch (\Throwable $th) {
+        //     return response()->json([
+        //         'code' => 422,
+        //         'errors' => $th
+        //     ]);
+        // }
     }
 
     public function destroy($id)
@@ -316,6 +369,8 @@ class PoDepositController extends Controller
             return response()->json(['code' => 404, 'data' => []]);
         }
     }
+
+
 
     public function show($id)
     {
@@ -353,35 +408,41 @@ class PoDepositController extends Controller
         }
         try {
             $purchase_orders = [];
-            foreach ($request->po_deposits as $key => $po) {
-                array_push($purchase_orders, [
-                    "client_po_number" => $po['client_po_number'],
-                    "client_po_date" => $po['client_po_date'],
-                    "client_pic_name" => $po['client_pic_name'],
-                    "total_price" => $po['total_price']
-                ]);
+            if($request->is_po_deposit){
+                foreach ($request->po_deposits as $key => $po) {
+                    array_push($purchase_orders, [
+                        "client_po_number" => $po['client_po_number'],
+                        "client_po_date" => $po['client_po_date'],
+                        "client_pic_name" => $po['client_pic_name'],
+                        "total_price" => $po['total_price']
+                    ]);
+                }
             }
             $podeposit = PoDeposit::findOrFail($id);
             $podeposit->update([
                 "job_number" => $request->job_number,
-                "pic_name" => $request->pic_name,
-                "client_po_number" => $request->client_po_number,
                 "client_po_date" => $request->client_po_date,
+                "client_po_number" => $request->client_po_number,
                 "client_company" => $request->client_company,
                 "client_pic_name" => $request->client_pic_name,
+                "pic_name" => $request->pic_name,
+                "status" => $request->status,
                 "purchase_ordres" => json_encode($purchase_orders),
                 "budget" => $request->budget,
                 "closed_at" => $request->closed_at,
-                "status" => $request->status,
                 "expense" => $request->expense,
                 "balance" => $request->balance,
+                "title" => $request->title ?? null,
+                "total_price" => $request->total_price ?? null,
+                "invoice_status" => $request->invoice_status ?? "new"
             ]);
 
-            $this->updateProject($request, $podeposit, false);
-            $this->updateProject($request, $podeposit, true);
-
-            notify('PO Deposit Updated', 'PO Deposit #' . $podeposit['job_number'], 'marketing', json_encode(["po_deposit" => $podeposit]), 'deposit');
-
+            $this->updateProject($request, $podeposit, true, $request->is_po_deposit, $request->status);
+            
+            if ($request->is_po_deposit) {
+                $this->updateProject($request, $podeposit, false, true, $request->status);
+                notify('PO Deposit Updated', 'PO Deposit #' . $podeposit['job_number'], 'marketing', json_encode(["po_deposit" => $podeposit]), 'deposit');
+            }
             return response()->json(['code' => 200]);
         } catch (ModelNotFoundException $e) {
             return response()->json(['code' => 404, 'data' => []]);

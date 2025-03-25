@@ -195,9 +195,9 @@ const menus = [
             />
             <strong>
                 {{
-                    menus.find((e) =>
-                        currentUrl.replace(/\//g, "").includes(e.activeon)
-                    )["title"]
+                    menus?.find((e) =>
+                        currentUrl?.replace(/\//g, "").includes(e.activeon)
+                    )?.["title"]
                 }}
             </strong>
             <div

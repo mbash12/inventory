@@ -192,15 +192,15 @@ onMounted(() => {
                                     <div
                                         class="text-xs font-medium capitalize"
                                         :class="
-                                            state.data?.po_deposit_data
-                                                ?.invoice_status == 'progress'
-                                                ? 'text-orange-500'
-                                                : 'text-green-500'
+                                            state.data
+                                                ?.invoice_status == 'sent'
+                                                ? 'text-green-500'
+                                                : 'text-orange-500'
                                         "
                                     >
                                         <span>{{
-                                            state.data?.po_deposit_data
-                                                ?.invoice_status
+                                            state.data
+                                                ?.invoice_status ?? 'Not Yet Processed'
                                         }}</span>
                                     </div>
                                 </div>

@@ -5,6 +5,8 @@ const emit = defineEmits(["select"]);
 const props = defineProps({
     value: String | Number,
     required: String,
+    inline: Boolean,
+    disabled: Boolean,
 });
 const state = reactive({
     focus: false,
@@ -39,18 +41,19 @@ watch(
 <template>
     <div class="relative w-full h-full rounded-lg">
         <div class="w-full h-full relative flex items-center input">
-            <div class="w-full  pl-45px items-center text-sm truncate" >
+            <div class="w-full  items-center text-sm truncate" :class="[props.inline ? 'pl-4' : 'pl-45px']">
                 {{ props.value }}
             </div>
             <input
                 :title="props.value"
                 type="text"
-                class="w-full h-full bg-white pl-45px absolute top-0 left-0 text-sm truncate"
+                class="w-full h-full bg-white absolute top-0 left-0 text-sm truncate"
                 @focus="state.focus = true"
                 @blur="state.focus = false, state.search = null"
                 :placeholder="props.value"
                 v-model="state.search"
-                :class="state.focus ? 'opacity-100' : 'opacity-0'"
+                :class="[state.focus ? 'opacity-100' : 'opacity-0', props.inline ? 'pl-4' : 'pl-45px']"
+                :disabled="props.disabled"
             />
         </div>
         <div
@@ -69,6 +72,6 @@ watch(
                  Not Found
             </div>
         </div>
-        <input type="hidden" required v-if="required == 'true' && value == null" name="hidden"/>
+        <input type="text" required v-if="required == 'true' && value == null" name="hidden" class="opacity-0 h-1px w-full"/>
     </div>
 </template>

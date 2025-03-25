@@ -27,8 +27,6 @@ const state = reactive({
     notification_count: null,
     notifications: [],
     notifications_meta: {},
-    submenuOpen: {},  // Add this new property
-    manuallyClosedMenus: new Set(), // Add this new property
 });
 const setnotiffilter = (name) => {
     loading()
@@ -106,36 +104,13 @@ const doLogout = () => {
     logout();
     router.push("/desktop/login");
 };
-const toggleSubmenu = (menuIndex) => {
-    if (state.submenuOpen[menuIndex]) {
-        state.manuallyClosedMenus.add(menuIndex);
-    } else {
-        state.manuallyClosedMenus.delete(menuIndex);
-    }
-    state.submenuOpen[menuIndex] = !state.submenuOpen[menuIndex];
-};
-const isSubmenuActive = (menu) => {
-    if (!menu.submenu) return false;
-    return menu.submenu.some(submenu => currentUrl.includes(submenu.activeon));
-};
-const shouldShowSubmenu = (menu, index) => {
-    const isActive = isSubmenuActive(menu);
-    // Show if active and not manually closed, or if manually opened
-    return (isActive && !state.manuallyClosedMenus.has(index)) || state.submenuOpen[index];
-};
-
 onMounted(() => {
     let opened = localStorage.getItem("menu_open");
     state.menu_open = opened === null ? true : opened === "true";
-    
-    // Initialize submenu state based on active routes
-    menus.forEach((menu, index) => {
-        if (isSubmenuActive(menu)) {
-            state.submenuOpen[index] = true;
-        }
-    });
-    
+    // clearInterval(getNotifCount);
+    // setInterval(getNotifCount, 60000);
     getNotifCount();
+    // getNotif();
 });
 const menus = [
     {
@@ -146,60 +121,19 @@ const menus = [
         roles: ["admin", "finance"],
         
     },
-    // {
-    //     icon: "ri-calendar-schedule-fill",
-    //     title: "Deadlines",
-    //     activeon: "desktopdeadlines",
-    //     link: "/desktop/deadlines",
-    //     roles: ["marketing", "admin", "finance","delivery"],
-    // },
     {
         icon: "ri-calendar-schedule-fill",
-        title: "Project Todo",
+        title: "Deadlines",
         activeon: "desktopdeadlines",
-        link: "",
-        roles: ["marketing", "admin", "finance", "delivery","design"],
-        submenu: [
-            {
-                title: "Task List",
-                link: "/desktop/task-list",
-                activeon: "desktop/task-list"
-            },
-            {
-                title: "Calendar",
-                link: "/desktop/calendar",
-                activeon: "desktop/calendar"
-            }
-        ]
+        link: "/desktop/deadlines",
+        roles: ["marketing", "admin", "finance","delivery"],
     },
     {
         icon: "ri-article-fill",
         title: "Projects",
         activeon: "desktopprojects",
-        link: "",
-        roles: ["marketing", "admin", "finance", "delivery","design"],
-        submenu: [
-            // {
-            //     title: "All Projects",
-            //     link: "/desktop",
-            //     activeon: "desktop/projects"
-            // },
-            {
-                title: "Gimmick",
-                link: "/desktop/gimmick",
-                activeon: "desktop/gimmick"
-            },
-            {
-                title: "Design & Printing",
-                link: "/desktop/design-printing",
-                activeon: "desktop/design-printing"
-            },
-            {
-                title: "Supplier Payment",
-                link: "/desktop/supplier-payment",
-                activeon: "desktop/supplier-payment"
-            }
-        ]
+        link: "/desktop",
+        roles: ["marketing", "admin", "finance", "delivery"],
     },
     {
         icon: "ri-money-dollar-circle-fill",
@@ -259,7 +193,7 @@ const menus = [
             class="flex-1 transition-all pt-55px bg-[#F0F1F6] overflow-auto"
             :class="state.menu_open ? 'ml-280px' : 'ml-0'"
         >
-            <slot :layoutData="{menu_open: state.menu_open}"></slot>
+            <slot></slot>
         </div>
         <div class="h-55px w-full bg-[#df3b3e] flex fixed top-0 left-0 z-20">
             <div
@@ -479,69 +413,50 @@ const menus = [
             <div class="flex-1 w-full overflow-auto">
                 <div class="flex flex-col gap-2 py-4">
                     <template v-for="(menu, i) in menus" :key="i">
-                        <div v-if="menu.roles.includes(user.position)">
-                            <router-link
-                                v-if="!menu.submenu"
-                                :to="menu.link"
-                            >
-                                <div class="flex pl-2 pr-4 relative group">
+                        <router-link
+                            :to="menu.link"
+                            v-if="menu.roles.includes(user.position)"
+                        >
+                            <div class="flex pl-2 pr-4 relative group">
+                                <div
+                                    class="flex flex-1 p-2 items-center gap-2 rounded-md transition-all"
+                                    :class="
+                                        currentUrl
+                                            .replace(/\//g, '')
+                                            .includes(menu.activeon)
+                                            ? 'bg-red-100'
+                                            : 'bg-white'
+                                    "
+                                >
                                     <div
-                                        class="flex flex-1 p-2 items-center gap-2 rounded-md transition-all"
-                                        :class="currentUrl.replace(/\//g, '').includes(menu.activeon) ? 'bg-red-100' : 'bg-white'"
+                                        class="flex items-center justify-center p-2 bg-red-500 rounded-lg w-35px h-35px text-white text-lg"
                                     >
-                                        <div class="flex items-center justify-center p-2 bg-red-500 rounded-lg w-35px h-35px text-white text-lg">
-                                            <i :class="menu.icon"></i>
-                                        </div>
-                                        <div :class="currentUrl.replace(/\//g, '').includes(menu.activeon) ? 'text-red-500 font-bold' : 'group-hover:text-red-500 text-[#404047]'">
-                                            {{ menu.title }}
-                                        </div>
+                                        <i :class="menu.icon"></i>
                                     </div>
-                                    <div class="absolute h-full w-6px bg-red-500 right-0 rounded-l"
-                                        :class="currentUrl.replace(/\//g, '').includes(menu.activeon) ? 'block' : 'hidden'"
-                                    ></div>
-                                </div>
-                            </router-link>
-                            <div v-else>
-                                <div 
-                                    class="flex pl-2 pr-4 relative group cursor-pointer" 
-                                    @click="toggleSubmenu(i)"
-                                >
-                                    <div class="flex flex-1 p-2 items-center gap-2 rounded-md transition-all"
-                                        :class="currentUrl.replace(/\//g, '').includes(menu.activeon) ? 'bg-red-100' : 'bg-white'"
+                                    <div
+                                        :class="
+                                            currentUrl
+                                                .replace(/\//g, '')
+                                                .includes(menu.activeon)
+                                                ? 'text-red-500 font-bold'
+                                                : 'group-hover:text-red-500 text-[#404047]'
+                                        "
                                     >
-                                        <div class="flex items-center justify-center p-2 bg-red-500 rounded-lg w-35px h-35px text-white text-lg">
-                                            <i :class="menu.icon"></i>
-                                        </div>
-                                        <div class="flex items-center justify-between flex-1">
-                                            <div :class="currentUrl.replace(/\//g, '').includes(menu.activeon) ? 'text-red-500 font-bold' : 'group-hover:text-red-500 text-[#404047]'">
-                                                {{ menu.title }}
-                                            </div>
-                                            <i 
-                                                class="ri-arrow-down-s-line transform transition-transform duration-200"
-                                                :class="state.submenuOpen[i] ? 'rotate-180' : ''"
-                                            ></i>
-                                        </div>
+                                        {{ menu.title }}
                                     </div>
                                 </div>
-                                <div 
-                                    class="ml-4 overflow-hidden transition-all duration-200 flex flex-col "
-                                    :class="shouldShowSubmenu(menu, i) ? 'max-h-[500px] opacity-100 my-3' : 'max-h-0 opacity-0'"
-                                >
-                                    <router-link
-                                        v-for="(submenu, j) in menu.submenu"
-                                        :key="j"
-                                        :to="submenu.link"
-                                        class="flex items-center gap-4 py-2 px-4 text-sm hover:text-red-500"
-                                        :class="currentUrl.includes(submenu.activeon) ? 'text-red-500 font-bold' : 'text-[#404047]'"
-                                    >
-                                        <span class="w-6px h-6px inline-block rounded" :class="currentUrl.includes(submenu.activeon) ? 'bg-red-500' : 'bg-[#404047]'"></span>
-                                        <span>
-                                            {{ submenu.title }}
-                                        </span>
-                                    </router-link>
-                                </div>
+                                <div
+                                    class="absolute h-full w-6px bg-red-500 right-0 rounded-l"
+                                    :class="
+                                        currentUrl
+                                            .replace(/\//g, '')
+                                            .includes(menu.activeon)
+                                            ? 'block'
+                                            : 'hidden'
+                                    "
+                                ></div>
                             </div>
-                        </div>
+                        </router-link>
                     </template>
                 </div>
             </div>

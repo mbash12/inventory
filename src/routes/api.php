@@ -21,6 +21,7 @@ use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 
 Route::post('init', [InitController::class, 'index']);
@@ -63,6 +64,7 @@ Route::apiResource('users', UserController::class);
 Route::apiResource('warehouses', WarehouseController::class);
 Route::apiResource('shipping-vendors', ShippingVendorController::class);
 Route::get('projects/snippet/{id}', [ProjectController::class, 'snippet']);
+Route::get('projects/todo', [ProjectController::class, 'todo']);
 Route::put('projects/delivery/{id}', [ProjectController::class, 'delivery']);
 Route::apiResource('projects', ProjectController::class);
 Route::get('po-deposits/migrate', [PoDepositController::class, 'migrate']);
@@ -98,7 +100,12 @@ Route::post('/upload', function (Request $request) {
         'file' => 'required|file|max:4096|mimes:jpeg,png,jpg,gif,pdf,doc,docx,xls,xlsx,ppt,pptx', // 4MB Max, limited file types
     ]);
     if ($request->file('file')->isValid()) {
-        $path = $request->file('file')->store('uploads', 'public');
+        $file = $request->file('file');
+        $originalName = $file->getClientOriginalName();
+        $randomString = Str::random(10); // Generate 10 character random string
+        $newFileName = $randomString . '_' . $originalName;
+        
+        $path = $request->file('file')->storeAs('uploads', $newFileName, 'public');
         return response()->json(['path' => $path], 201);
     }
 

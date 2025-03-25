@@ -213,6 +213,11 @@ export const apilist = {
         auth:true,
         method:'GET'
     },
+    getProjectTodo:{
+        url:"/projects/todo",
+        auth:true,
+        method:'GET'
+    },
     // 
     getNotificationCount:{
         url:"/notifications/unread-count",

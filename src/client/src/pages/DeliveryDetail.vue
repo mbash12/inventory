@@ -29,6 +29,7 @@ const state = reactive({
     bulkdata: null,
     viewFile: null,
     receipt_files: [],
+    edit:false,
 });
 const editMode = ref(false);
 const handleEditMode = () => {
@@ -67,11 +68,12 @@ const handleDeliverItem = () => {
     state.selected = null;
 };
 
-const removeFile = (i) => {
-    state.receipt_files.splice(i, 1)
+const removeFile = (type, i) => {
+    if(type === 'do_files') state.do_files.splice(i, 1)
+    if(type === 'receipt_files') state.receipt_files.splice(i, 1)
 }
 
-const uploadFile = (e) => {
+const uploadFile = (type, e) => {
     
     const file = e.target.files[0];
     if (file.size > 4 * 1024 * 1024) {
@@ -86,7 +88,8 @@ const uploadFile = (e) => {
     }
     loading();
     upload(file).then((r) => {
-        state.receipt_files = [...state.receipt_files, r.path]
+        if(type === 'do_files') state.do_files = [...state.do_files, r.path]
+        if(type === 'receipt_files') state.receipt_files = [...state.receipt_files, r.path]
         loading(false);
     });
 }
@@ -101,6 +104,7 @@ onMounted(() => {
             if (state.data.do_file) {
                 state.data.do_files.push(state.data.do_file);
             }
+            state.do_files = state.data.do_files;
             state.bulkdata = JSON.parse(
                 JSON.stringify(r.data.delivery_items_data)
             );
@@ -112,6 +116,7 @@ const submit = () => {
     let data = {
         ...state.data,
         receipt_files: JSON.stringify(state.receipt_files),
+        do_files: JSON.stringify(state.do_files),
         delivery_items: state.data.delivery_items_data,
     };
     loading();
@@ -222,7 +227,7 @@ const submit = () => {
                             </div>
                         </div>
                     </div>
-                    <div
+                    <!-- <div
                         class="flex justify-between px-4 py-3 items-center border-b"
                         v-if="state.data?.do_files?.length"
                     >
@@ -245,7 +250,50 @@ const submit = () => {
                                 class="w-full h-full object-cover"
                             />
                         </div>
+                    </div> -->
+
+                    <div
+                        class="flex justify-between px-4 py-3 items-center border-b"
+                    >
+                        <span class="text-xs text-blue-gray-600 font-semibold"
+                            >Foto Surat Jalan</span
+                        >
                     </div>
+                    <div class="flex gap-2 overflow-auto w-full p-2 border-b">
+                        <div
+                            class="w-80px h-80px flex-shrink-0 relative border rounded flex flex-col items-center justify-center"
+                            v-if="state.edit || state.data?.status != 'delivered'"
+                        >
+                            <i class="ri-upload-line text-2xl"></i>
+                            <span class="text-xs text-blue-gray-400"
+                                >Upload</span
+                            >
+                            <input
+                                type="file"
+                                class="w-full h-full opacity-0 absolute inset-0"
+                                @input="uploadFile('do_files', $event)"
+                                accept="image/*"
+                            />
+                        </div>
+                        <div
+                            class="flex items-center w-80px h-80px flex-shrink-0 rounded border relative"
+                            v-for="(file, i) in state?.do_files"
+                            @click="state.viewFile = file"
+                        >
+                            <img
+                                :src="ASSETSURL + file"
+                                alt=""
+                                class="w-full h-full"
+                            />
+                            <i
+                                class="ri-close-circle-fill text-red-500 text-3xl absolute -top-2 w-28px h-28px block flex items-center justify-center -right-2"
+                                v-if="state.edit"
+                                @click.stop="removeFile(i)"
+                            ></i>
+                        </div>
+                    </div>
+
+
 
                     <div
                         class="flex justify-between px-4 py-3 items-center border-b"
@@ -257,7 +305,7 @@ const submit = () => {
                     <div class="flex gap-2 overflow-auto w-full p-2 border-b">
                         <div
                             class="w-80px h-80px flex-shrink-0 relative border rounded flex flex-col items-center justify-center"
-                            v-if="state.data?.status !== 'delivered'"
+                            v-if="state.edit || state.data?.status != 'delivered'"
                         >
                             <i class="ri-upload-line text-2xl"></i>
                             <span class="text-xs text-blue-gray-400"
@@ -266,7 +314,7 @@ const submit = () => {
                             <input
                                 type="file"
                                 class="w-full h-full opacity-0 absolute inset-0"
-                                @input="uploadFile"
+                                @input="uploadFile('receipt_files', $event)"
                                 accept="image/*"
                             />
                         </div>
@@ -282,11 +330,32 @@ const submit = () => {
                             />
                             <i
                                 class="ri-close-circle-fill text-red-500 text-3xl absolute -top-2 w-28px h-28px block flex items-center justify-center -right-2"
-                                v-if="state.data?.status !== 'delivered'"
+                                v-if="state.edit"
                                 @click.stop="removeFile(i)"
                             ></i>
                         </div>
                     </div>
+                    <div
+                        class="flex justify-between px-4 py-3 items-center border-b"
+                    >
+                    <button
+                            class="flex px-3 h-10 gap-2 items-center justify-center bg-app-500 text-white rounded-full w-full"
+                            v-if="state.edit && state.data?.status == 'delivered'"
+                            >
+                                <i class="ri-save-line text-xl"></i>
+                                <span class="text-sm mt-1"> Save Images </span>
+                            </button>
+                            <button
+                            class="flex px-3 h-10 gap-2 items-center justify-center bg-app-500 text-white rounded-full w-full"
+                            v-if="!state.edit && state.data?.status == 'delivered'"
+                            @click="state.edit = true"
+                            type="button"
+                            >
+                                <i class="ri-pencil-line text-xl"></i>
+                                <span class="text-sm mt-1"> Update Images </span>
+                            </button>
+
+                    </div>  
                     <div
                         class="flex justify-between px-4 py-3 items-center border-b"
                     >
@@ -337,7 +406,7 @@ const submit = () => {
                                 </span>
                             </div>
                         </button>
-                        <div class="p-4 w-full mb-4 flex gap-4">
+                        <div class="p-4 w-full mb-4 flex gap-4" v-if="state.data?.status !== 'delivered'">
                             <button
                                 type="button"
                                 class="flex p-2 gap-2 items-center justify-center bg-app-500 text-white w-full rounded"

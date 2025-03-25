@@ -14,7 +14,7 @@ const state = reactive({
     // shipping_vendor: null,
     production_deadline: null,
     delivery_deadline: null,
-    alert_time: null,
+    // alert_time: null,
     note: null,
 });
 watch(props, () => {
@@ -29,7 +29,7 @@ const submit = () => {
         project: state.id,
         delivery_deadline: state.delivery_deadline,
         production_deadline: state.production_deadline,
-        alert_time: state.alert_time,
+        // alert_time: state.alert_time,
         note: state.note,
     };
 
@@ -81,7 +81,7 @@ const submit = () => {
                             required="true"
                         />
                     </label>
-                    <label class="flex flex-col gap-2 w-full text-sm">
+                    <!-- <label class="flex flex-col gap-2 w-full text-sm">
                         <span>Alert Setting</span>
                         <select
                             v-model="state.alert_time"
@@ -95,7 +95,7 @@ const submit = () => {
                                 </option>
                             </template>
                         </select>
-                    </label>
+                    </label> -->
 
                     <label class="flex flex-col gap-2 w-full text-sm">
                         <span>Notes</span>

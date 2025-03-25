@@ -50,7 +50,7 @@ const props = defineProps({
                             :class="`w-2/3 h-12 flex items-center justify-center rounded-full  bg-gray-100 font-medium text-[16px]  cursor-pointer mt-8 text-black`"
                             @click="$emit('hide')"
                         >
-                            Cancel
+                            Close
                         </div>
                         <div
                             :class="`w-2/3 h-12 flex items-center justify-center rounded-full text-white font-medium text-[16px]  cursor-pointer mt-8 ${

@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, reactive, ref, computed } from "vue";
 import dayjs from "dayjs";
 import LightImage from "../components/LightImage.vue";
 import { useRoute, useRouter } from "vue-router";
@@ -9,6 +9,8 @@ import {
     nom,
     sortByProperty,
     currentUser,
+    deletePodeposit,
+    cancelPodeposit,
 } from "../services/service";
 import { loading } from "../services/router";
 import Confirm from "../components/Confirm.vue";
@@ -16,6 +18,7 @@ import Table from "../components/Table.vue";
 import Popover from "../components/Popover.vue";
 const user = currentUser.user?.user;
 const confirmDelete = ref(false);
+const confirmCancel = ref(false);
 const router = useRouter();
 const route = useRoute();
 const state = reactive({
@@ -39,13 +42,18 @@ const state = reactive({
     page: 1,
     export: null,
     export_mode: "print",
+    project_type: "gimmick",
+    selectedc: [],
+    thetype:[],
 });
 const deleteSelectedProject = () => {
     confirmDelete.value = false;
     loading();
-    const deletePromises = state.selected.map((project) =>
-        deleteProject(project)
-    );
+    const deletePromises = state.selected?.map((project) => {
+        const po = state.data.find((e) => e.id == project);
+        console.log(po);
+        return deletePodeposit(po.po_deposit);
+    });
     Promise.all(deletePromises).finally(() => {
         search();
     });
@@ -53,6 +61,21 @@ const deleteSelectedProject = () => {
 const setDelete = (id) => {
     state.selected = [id];
     confirmDelete.value = true;
+};
+const cancelSelectedProject = () => {
+    confirmCancel.value = false;
+    loading();
+    const cancelPromises = state.selectedc?.map((project) => {
+        const po = state.data.find((e) => e.id == project);
+        return cancelPodeposit(po.po_deposit);
+    });
+    Promise.all(cancelPromises).finally(() => {
+        search();
+    });
+};
+const setCancel = (id) => {
+    state.selectedc = [id];
+    confirmCancel.value = true;
 };
 const toggle_filter = () => {
     state.filter_open = !state.filter_open;
@@ -135,6 +158,11 @@ const resetFilter = () => {
     state.limit = 10;
     search();
 };
+
+const goToPage = (page) => {
+    state.page = page;
+    search();
+};
 const doSearch = () => {
     state.page = 1;
     search();
@@ -142,6 +170,8 @@ const doSearch = () => {
 const search = () => {
     state.selected = [];
     loading();
+    const type = state.project_type.split("-");
+    console.log(state.po)
     let filter = {
         search: state.search,
         order_by: state.order_by,
@@ -155,13 +185,17 @@ const search = () => {
         end_date: state.end_date,
         page: state.page,
         limit: state.limit,
+        project_type: type,
     };
+    if(state.thetype.length){
+        filter.type = state.thetype.join(",");
+    }
     Object.keys(filter).forEach((key) => {
         if (filter[key] === null || filter[key] === "") {
             delete filter[key];
         }
     });
-    localStorage.setItem("prj", JSON.stringify(filter));
+    localStorage.setItem(state.project_type, JSON.stringify(filter));
 
     getProjectList(filter).then((r) => {
         loading(false);
@@ -180,6 +214,29 @@ const search = () => {
         }
     });
 };
+
+const computedPages = computed(() => {
+    const total = state.meta?.total_pages ?? 1;
+    const current = state.page;
+
+    if (total <= 5) {
+        // When there are 5 or fewer pages, show them all.
+        return Array.from({ length: total }, (_, i) => i + 1);
+    }
+
+    if (current <= 3) {
+        // When current page is near the start, show pages 1-4 and the last page.
+        return [1, 2, 3, 4, total];
+    }
+
+    if (current >= total - 2) {
+        // When current page is near the end, show the first page and the last 4 pages.
+        return [1, total - 3, total - 2, total - 1, total];
+    }
+
+    // Otherwise, current page is in the middle: show first page, one before current, current, one after, and last page.
+    return [1, current - 1, current, current + 1, total];
+});
 
 const prepareExport = (mode) => {
     state.export_mode = mode;
@@ -207,9 +264,9 @@ const prepareExport = (mode) => {
             "Pelangi's PIC": e.pic_name,
             Invoices: invoices,
             "Invoiced Amount": e.invoiced_amount,
-            "Invoice Status": e?.invoice_status?.replace(/./, (c) =>
-                c.toUpperCase()
-            ),
+            "Invoice Status": (
+                e?.invoice_status ?? "Not Yet Processed"
+            )?.replace(/./, (c) => c.toUpperCase()),
             "Invoice PIC": e?.invoice_pic?.replace(/./, (c) => c.toUpperCase()),
             Deposit: e.is_po_deposit ? "Yes" : "No",
             Actual: e.is_real ? "Yes" : "No",
@@ -229,12 +286,14 @@ const prepareExport = (mode) => {
                 "",
         };
     });
-
+    // console.log(data)
     state.export = data;
 };
 onMounted(() => {
+    state.project_type = route.path.replace("/desktop/", "");
+    console.log(state.project_type);
     if (route.query?.filter) {
-        let flt = localStorage.getItem("prj");
+        let flt = localStorage.getItem(state.project_type);
         if (flt) {
             flt = JSON.parse(flt);
             state.search = flt?.search ?? null;
@@ -251,7 +310,7 @@ onMounted(() => {
             state.limit = flt?.limit ?? null;
         }
     } else {
-        localStorage.removeItem("prj");
+        localStorage.removeItem(state.project_type);
     }
     search();
 });
@@ -259,8 +318,61 @@ onMounted(() => {
 
 <template>
     <div class="p-8">
-        <div class="text-2xl text-[#001737] font-semibold mb-6 text-left">
-            Projects
+        <div
+            class="text-[#001737] font-semibold mb-6 text-left flex items-center"
+        >
+            <span class="text-2xl capitalize">
+                {{
+                    state.project_type == "design-printing"
+                        ? "Design & Printing"
+                        : state.project_type.split("-").join(" ")
+                }}
+            </span>
+            <span class="flex-1"></span>
+            <div class="flex gap-1 text-md">
+                <!-- Previous Button -->
+                <button
+                    class="h-[40px] px-3 border bg-white rounded shadow text-gray-700 hover:shadow-sm hover:bg-gray-50 flex items-center justify-center disabled:opacity-50"
+                    :disabled="state.page === 1"
+                    @click="prevPage"
+                >
+                    <i class="ri-arrow-left-s-line"></i>
+                </button>
+
+                <!-- Pagination Buttons -->
+                <template v-for="(p, index) in computedPages" :key="p">
+                    <!-- Insert ellipsis if there's a gap between consecutive pages -->
+                    <template
+                        v-if="index > 0 && p - computedPages[index - 1] > 1"
+                    >
+                        <span
+                            class="h-[40px] px-3 flex items-center justify-center"
+                            >...</span
+                        >
+                    </template>
+                    <button
+                        class="h-[40px] px-3 flex items-center justify-center font-semibold"
+                        :class="
+                            state.page === p
+                                ? 'border bg-white rounded shadow text-red-500 hover:shadow-sm hover:bg-gray-50 '
+                                : 'text-gray-700'
+                        "
+                        :disabled="state.page === p"
+                        @click="goToPage(p)"
+                    >
+                        <span>{{ p }}</span>
+                    </button>
+                </template>
+
+                <!-- Next Button -->
+                <button
+                    class="h-[40px] px-3 border bg-white rounded shadow text-gray-700 hover:shadow-sm hover:bg-gray-50 flex items-center justify-center disabled:opacity-50"
+                    :disabled="state.page === (state.meta?.total_pages ?? 1)"
+                    @click="nextPage"
+                >
+                    <i class="ri-arrow-right-s-line"></i>
+                </button>
+            </div>
         </div>
         <div class="flex justify-between mb-6">
             <div class="flex gap-2">
@@ -295,7 +407,7 @@ onMounted(() => {
                                         class="font-semibold text-blue-grayy-700 text-sm"
                                         >Status</strong
                                     >
-                                    <label
+                                    <!-- <label
                                         class="flex items-center justify-start gap-2 my-2 text-sm w-full"
                                     >
                                         <input
@@ -310,25 +422,8 @@ onMounted(() => {
                                             "
                                         />
                                         <span>New</span>
-                                    </label>
-                                    <label
-                                        class="flex items-center justify-start gap-2 my-2 text-sm w-full"
-                                    >
-                                        <input
-                                            type="checkbox"
-                                            value="delivered"
-                                            @input="
-                                                (e) =>
-                                                    handleSetFilter(e, 'status')
-                                            "
-                                            :checked="
-                                                state.status.includes(
-                                                    'delivered'
-                                                )
-                                            "
-                                        />
-                                        <span>Delivered</span>
-                                    </label>
+                                    </label> -->
+
                                     <label
                                         class="flex items-center justify-start gap-2 my-2 text-sm w-full"
                                     >
@@ -366,18 +461,21 @@ onMounted(() => {
                                     >
                                         <input
                                             type="checkbox"
-                                            value="cancel"
+                                            value="delivered"
                                             @input="
                                                 (e) =>
                                                     handleSetFilter(e, 'status')
                                             "
                                             :checked="
-                                                state.status.includes('cancel')
+                                                state.status.includes(
+                                                    'delivered'
+                                                )
                                             "
                                         />
-                                        <span>Cancel</span>
+                                        <span>Delivered</span>
                                     </label>
-                                    <label
+
+                                    <!-- <label
                                         class="flex items-center justify-start gap-2 my-2 text-sm w-full"
                                     >
                                         <input
@@ -394,6 +492,22 @@ onMounted(() => {
                                             "
                                         />
                                         <span>On Production</span>
+                                    </label> -->
+                                    <label
+                                        class="flex items-center justify-start gap-2 my-2 text-sm w-full"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            value="cancel"
+                                            @input="
+                                                (e) =>
+                                                    handleSetFilter(e, 'status')
+                                            "
+                                            :checked="
+                                                state.status.includes('cancel')
+                                            "
+                                        />
+                                        <span>Cancel</span>
                                     </label>
                                     <div class="h-2"></div>
                                     <strong
@@ -409,7 +523,7 @@ onMounted(() => {
                                             @input="
                                                 (e) => handleSetSingle(e, 'po')
                                             "
-                                            :checked="state.po === true"
+                                            :checked="state.po.includes('true')"
                                         />
                                         <span>Sudah Ada PO</span>
                                     </label>
@@ -422,11 +536,89 @@ onMounted(() => {
                                             @input="
                                                 (e) => handleSetSingle(e, 'po')
                                             "
-                                            :checked="state.po === false"
+                                            :checked="
+                                                state.po.includes('false')
+                                            "
                                         />
                                         <span>Dalam Proses</span>
                                     </label>
+                                    <label
+                                        class="flex items-center justify-start gap-2 my-2 text-sm w-full"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            value="deposit"
+                                            @input="
+                                                (e) =>
+                                                    handleSetSingle(
+                                                        e,
+                                                        'deposit'
+                                                    )
+                                            "
+                                            :checked="
+                                                state.deposit.includes(
+                                                    'deposit'
+                                                )
+                                            "
+                                        />
+                                        <span>Deposit</span>
+                                    </label>
                                     <div class="h-2"></div>
+                                    <strong
+                                        class="font-semibold text-blue-grayy-700 text-sm"
+                                        >Document</strong
+                                    >
+                                    <label
+                                        class="flex items-center justify-start gap-2 my-2 text-sm w-full"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            value="true"
+                                            @input="
+                                                (e) =>
+                                                    handleSetSingle(
+                                                        e,
+                                                        'document'
+                                                    )
+                                            "
+                                            :checked="state.po === true"
+                                        />
+                                        <span>DO</span>
+                                    </label>
+                                    <label
+                                        class="flex items-center justify-start gap-2 my-2 text-sm w-full"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            value="true"
+                                            @input="
+                                                (e) =>
+                                                    handleSetSingle(
+                                                        e,
+                                                        'document'
+                                                    )
+                                            "
+                                            :checked="state.po === true"
+                                        />
+                                        <span>BAST</span>
+                                    </label>
+                                    <label
+                                        class="flex items-center justify-start gap-2 my-2 text-sm w-full"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            value="true"
+                                            @input="
+                                                (e) =>
+                                                    handleSetSingle(
+                                                        e,
+                                                        'document'
+                                                    )
+                                            "
+                                            :checked="state.po === true"
+                                        />
+                                        <span>GR/TBP</span>
+                                    </label>
                                     <!-- <strong
                                         class="font-semibold text-blue-grayy-700 text-sm"
                                         >PO Action</strong
@@ -483,7 +675,7 @@ onMounted(() => {
                                 <div class="flex-1 p-2 pl-4">
                                     <strong
                                         class="font-semibold text-blue-grayy-700 text-sm"
-                                        >PO Date</strong
+                                        >Tanggal</strong
                                     >
                                     <label
                                         class="flex items-start justify-start gap-2 my-2 text-sm w-full flex-col"
@@ -520,7 +712,7 @@ onMounted(() => {
                                             value="sent"
                                             @input="
                                                 (e) =>
-                                                    handleSetSingle(
+                                                    handleSetFilter(
                                                         e,
                                                         'invoice'
                                                     )
@@ -539,7 +731,7 @@ onMounted(() => {
                                             value="progress"
                                             @input="
                                                 (e) =>
-                                                    handleSetSingle(
+                                                    handleSetFilter(
                                                         e,
                                                         'invoice'
                                                     )
@@ -552,12 +744,75 @@ onMounted(() => {
                                         />
                                         <span>Progress</span>
                                     </label>
-                                    <div class="h-2"></div>
-                                    <strong
-                                        class="font-semibold text-blue-grayy-700 text-sm"
-                                        >Project Type</strong
-                                    >
                                     <label
+                                        class="flex items-center justify-start gap-2 my-2 text-sm w-full"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            value="new"
+                                            @input="
+                                                (e) =>
+                                                    handleSetFilter(
+                                                        e,
+                                                        'invoice'
+                                                    )
+                                            "
+                                            :checked="
+                                                state.invoice.includes(
+                                                    'new'
+                                                )
+                                            "
+                                        />
+                                        <span>Not Yet Processed</span>
+                                    </label>
+                                    <template
+                                        v-if="
+                                            state.project_type ==
+                                            'design-printing'
+                                        "
+                                    >
+                                        <div class="h-2"></div>
+                                        <strong
+                                            class="font-semibold text-blue-grayy-700 text-sm"
+                                            >Project Type</strong
+                                        >
+                                        <label
+                                            class="flex items-center justify-start gap-2 my-2 text-sm w-full"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                value="design"
+                                                @input="
+                                                    (e) =>
+                                                    handleSetSingle(
+                                                            e,
+                                                            'thetype'
+                                                        )
+                                                "
+                                                :checked="state.thetype.includes('design')"
+                                            />
+                                            <span>Design</span>
+                                        </label>
+                                        <label
+                                            class="flex items-center justify-start gap-2 my-2 text-sm w-full"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                value="printing"
+                                                @input="
+                                                    (e) =>
+                                                    handleSetSingle(
+                                                            e,
+                                                            'thetype'
+                                                        )
+                                                "
+                                                :checked="state.thetype.includes('printing')"
+                                            />
+                                            <span>Printing</span>
+                                        </label>
+                                    </template>
+
+                                    <!-- <label
                                         class="flex items-center justify-start gap-2 my-2 text-sm w-full"
                                     >
                                         <input
@@ -598,7 +853,7 @@ onMounted(() => {
                                             "
                                         />
                                         <span>Non Deposit</span>
-                                    </label>
+                                    </label> -->
                                     <div class="h-2"></div>
                                     <strong
                                         class="font-semibold text-blue-grayy-700 text-sm"
@@ -644,14 +899,14 @@ onMounted(() => {
                         </div>
                     </div>
                 </div>
-                <button
+                <!-- <button
                     class="h-45px px-4 border bg-white rounded-lg gap-2 shadow text-[#306DCE] hover:shadow-sm hover:bg-gray-50 flex items-center"
                     @click="prepareExport('print')"
                     v-if="user.position !== 'delivery'"
                 >
                     <i class="ri-printer-fill text-xl"></i>
                     <strong>Print</strong>
-                </button>
+                </button> -->
                 <button
                     class="h-45px px-4 border bg-white rounded-lg gap-2 shadow text-[#1C8B54] hover:shadow-sm hover:bg-gray-50 flex items-center"
                     @click="prepareExport('excel')"
@@ -660,15 +915,16 @@ onMounted(() => {
                     <i class="ri-file-excel-2-fill text-xl"></i>
                     <strong>Excel</strong>
                 </button>
+
                 <button
                     v-if="
-                        user.position == 'marketing' || user.position == 'admin'
+                        user.position == 'marketing' || user.position == 'admin' || user.position == 'design'
                     "
-                    class="h-45px px-4 border border-red-300 bg-red-500 rounded-lg gap-2 shadow text-white hover:shadow-sm hover:bg-red-600 flex items-center"
-                    @click="() => router.push('/desktop/projects/add')"
+                    class="h-45px px-4 border border-red-600 bg-white rounded-lg gap-2 shadow text-red-600 hover:shadow-sm hover:bg-gray-50 flex items-center"
+                    @click="() => router.push('/desktop/projects/add?back=' + route.path)"
                 >
                     <i class="ri-add-line text-xl"></i>
-                    <strong>Add Project</strong>
+                    <strong>Create</strong>
                 </button>
                 <button
                     v-if="
@@ -716,118 +972,67 @@ onMounted(() => {
                             </th>
 
                             <th class="p-1">
-                                <button
-                                    @click="() => setSort('job_number')"
-                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 hover:bg-gray-200 w-full group"
+                                <div
+                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full"
                                 >
-                                    <span class="font-bold leading-4"
-                                        >Job Number</span
-                                    >
-                                    <i
-                                        :class="
-                                            state.order_by === 'job_number'
-                                                ? state.sort === 'asc'
-                                                    ? 'opacity-100'
-                                                    : 'opacity-100 rotate-180'
-                                                : 'opacity-30'
-                                        "
-                                        class="ri-arrow-down-line text-lg font-thin transform"
-                                    ></i>
-                                </button>
+                                    <span class="font-bold leading-4">Job Number</span>
+                                </div>
                             </th>
-                            <th class="p-1">
-                                <button
-                                    @click="() => setSort('client_po_date')"
-                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 hover:bg-gray-200 w-full group"
+                            <th class="p-1 min-w-160px">
+                                <div
+                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full"
                                 >
-                                    <span class="font-bold leading-4">PO</span>
-                                    <i
-                                        :class="
-                                            state.order_by === 'client_po_date'
-                                                ? state.sort === 'asc'
-                                                    ? 'opacity-100'
-                                                    : 'opacity-100 rotate-180'
-                                                : 'opacity-30'
-                                        "
-                                        class="ri-arrow-down-line text-lg font-thin transform"
-                                    ></i>
-                                </button>
-                            </th>
-                            <th class="p-1">
-                                <button
-                                    @click="() => setSort('client_company')"
-                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 hover:bg-gray-200 w-full group"
-                                >
-                                    <span class="font-bold leading-4 group"
-                                        >Client</span
-                                    >
-                                    <i
-                                        :class="
-                                            state.order_by === 'client_company'
-                                                ? state.sort === 'asc'
-                                                    ? 'opacity-100'
-                                                    : 'opacity-100 rotate-180'
-                                                : 'opacity-30'
-                                        "
-                                        class="ri-arrow-down-line text-lg font-thin transform"
-                                    ></i>
-                                </button>
+                                    <span class="font-bold leading-4">Project Type</span>
+                                </div>
                             </th>
                             <th class="p-1">
                                 <div
-                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full cursor-default group"
+                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full"
                                 >
-                                    <span class="font-bold leading-4"
-                                        >Invoice</span
-                                    >
+                                    <span class="font-bold leading-4">PO</span>
+                                </div>
+                            </th>
+                            <th class="p-1">
+                                <div
+                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full"
+                                >
+                                    <span class="font-bold leading-4">Client</span>
+                                </div>
+                            </th>
+                            <th class="p-1 min-w-120px">
+                                <div
+                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full"
+                                >
+                                    <span class="font-bold leading-4">Invoice</span>
                                 </div>
                             </th>
                             <th class="p-1 w-160px">
                                 <div
-                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full cursor-default group"
+                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full"
                                 >
-                                    <span class="font-bold leading-4"
-                                        >Product</span
-                                    >
+                                    <span class="font-bold leading-4">Product</span>
                                 </div>
                             </th>
                             <th class="p-1 w-100px">
                                 <div
-                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full cursor-default group"
+                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full"
                                 >
-                                    <span class="font-bold leading-4"
-                                        >Price</span
-                                    >
+                                    <span class="font-bold leading-4">Price</span>
                                 </div>
                             </th>
-                            <th class="p-1 w-50px">
+                            <th class="p-1 w-100px">
                                 <div
-                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full cursor-default group"
+                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full"
                                 >
-                                    <span class="font-bold leading-4"
-                                        >Deposit</span
-                                    >
+                                    <span class="font-bold leading-4">Deposit</span>
                                 </div>
                             </th>
                             <th class="p-1 w-120px">
-                                <button
-                                    @click="() => setSort('status')"
-                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 hover:bg-gray-200 w-full group"
+                                <div
+                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full"
                                 >
-                                    <span class="font-bold leading-4"
-                                        >Status</span
-                                    >
-                                    <i
-                                        :class="
-                                            state.order_by === 'status'
-                                                ? state.sort === 'asc'
-                                                    ? 'opacity-100'
-                                                    : 'opacity-100 rotate-180'
-                                                : 'opacity-30'
-                                        "
-                                        class="ri-arrow-down-line text-lg font-thin transform"
-                                    ></i>
-                                </button>
+                                    <span class="font-bold leading-4">Status</span>
+                                </div>
                             </th>
                             <th class="p-1"></th>
                         </tr>
@@ -858,9 +1063,23 @@ onMounted(() => {
                                         class="flex items-start justify-center p-1 flex-col whitespace-nowrap"
                                     >
                                         {{ row.job_number }}
-                                        <span class="text-xs text-gray-400">
+                                        <div
+                                            class="text-xs text-gray-400 w-200px truncate"
+                                            :title="row.title"
+                                        >
                                             {{ row.title }}
-                                        </span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td class="p-1">
+                                <div
+                                    class="flex items-center justify-start p-1"
+                                >
+                                    <div
+                                        class="flex items-start justify-center p-1 flex-col whitespace-nowrap capitalize"
+                                    >
+                                        {{ row.project_type }}
                                     </div>
                                 </div>
                             </td>
@@ -884,7 +1103,8 @@ onMounted(() => {
                                                 )
                                             "
                                             :title="
-                                                'PO Deadline: '+dayjs(row?.po_deadline).format(
+                                                'PO Deadline: ' +
+                                                dayjs(row?.po_deadline).format(
                                                     'DD MMM YYYY'
                                                 )
                                             "
@@ -954,7 +1174,11 @@ onMounted(() => {
                                         "
                                         class="flex items-center gap-2"
                                     >
-                                        On Progress
+                                        {{
+                                            row.invoice_status == "progress"
+                                                ? "On process"
+                                                : "Not yet process"
+                                        }}
                                     </span>
                                     <div
                                         v-if="
@@ -1004,6 +1228,14 @@ onMounted(() => {
                                             >
                                         </div>
                                     </div>
+
+                                    <i
+                                            v-if="
+                                                row?.status == 'delivered' &&
+                                                row?.invoice_status != 'sent'
+                                            "
+                                            class="ri-alert-fill text-xl text-red-500"
+                                        ></i>
                                     <Popover
                                         v-if="row?.meta?.invoice_deadline"
                                         :content="
@@ -1015,13 +1247,6 @@ onMounted(() => {
                                         :title="'Finance Note'"
                                     >
                                         <i
-                                            v-if="
-                                                row?.status == 'delivered' && row?.invoice_status != 'sent'
-                                            "
-                                            class="ri-alert-fill text-xl text-red-500"
-                                        ></i>
-                                        <i
-                                            v-else
                                             class="ri-information-fill text-xl text-blue-500"
                                         ></i>
                                     </Popover>
@@ -1065,6 +1290,31 @@ onMounted(() => {
                                 >
                                     <div
                                         class="flex items-start justify-center p-1 flex-col whitespace-nowrap"
+                                    >
+                                        <strong
+                                            :style="`color: ${
+                                                row.is_po_deposit &&
+                                                !row.is_real
+                                                    ? '#A045C9'
+                                                    : row.is_real &&
+                                                      row.is_po_deposit
+                                                    ? '#1973C7'
+                                                    : '#19A470'
+                                            }`"
+                                        >
+                                            {{
+                                                row.is_po_deposit &&
+                                                !row.is_real
+                                                    ? "Non Actual"
+                                                    : row.is_real &&
+                                                      row.is_po_deposit
+                                                    ? "Actual"
+                                                    : "Non Deposit"
+                                            }}
+                                        </strong>
+                                    </div>
+                                    <!-- <div
+                                        class="flex items-start justify-center p-1 flex-col whitespace-nowrap"
                                         v-if="row.is_po_deposit && !row.is_real"
                                         :title="`Deposit Non Actual`"
                                     >
@@ -1093,12 +1343,13 @@ onMounted(() => {
                                         <span class="text-2xl text-blue-600">
                                             <i class="ri-box-2-fill"></i>
                                         </span>
-                                    </div>
+                                    </div> -->
                                 </div>
                             </td>
                             <td class="p-1">
                                 <div
                                     class="flex gap-2 items-center justify-start p-1"
+                                    v-if="['gimmick','printing'].includes(row.project_type)"
                                 >
                                     <span
                                         class="rounded-full px-2 py-1 text-11px font-medium text-white whitespace-nowrap flex"
@@ -1152,7 +1403,8 @@ onMounted(() => {
                                             )
                                         "
                                         :title="
-                                            'Production Deadline: '+dayjs(
+                                            'Production Deadline: ' +
+                                            dayjs(
                                                 row?.production_deadline
                                             ).format('DD MMM YYYY')
                                         "
@@ -1184,7 +1436,8 @@ onMounted(() => {
                                             )
                                         "
                                         :title="
-                                            'Delivery Deadline: '+dayjs(
+                                            'Delivery Deadline: ' +
+                                            dayjs(
                                                 row?.delivery_deadline
                                             ).format('DD MMM YYYY')
                                         "
@@ -1204,11 +1457,73 @@ onMounted(() => {
                                         ></i>
                                     </Popover>
                                 </div>
+                                <div
+                                    class="flex gap-2 items-center justify-start p-1"
+                                    v-else
+                                >
+                                <i
+                                            v-if="row.status === 'ready'"
+                                            class="ri-alert-fill text-xl text-red-500"
+                                        ></i>
+                                    <span
+                                        class="rounded-full px-2 py-1 text-11px font-medium text-white whitespace-nowrap flex"
+                                        v-if="
+                                            (row?.is_real &&
+                                                row?.is_po_deposit) ||
+                                            (row?.is_real &&
+                                                !row?.is_po_deposit)
+                                        "
+                                        :class="
+                                            row.status === 'delivered'
+                                                ? 'bg-[#6FD669]'
+                                                : row.status === 'partial'
+                                                ? 'bg-[#4DC8E3]'
+                                                : row.status === 'ready'
+                                                ? 'bg-[#E44545]'
+                                                : row.status === 'cancel'
+                                                ? 'bg-[#E44545]'
+                                                : row?.status === 'production'
+                                                ? 'bg-[#E5C100]'
+                                                : row?.status === 'new'
+                                                ? 'bg-[#AD58D4]'
+                                                : ''
+                                        "
+                                        >{{
+                                            row.status === "delivered"
+                                                ? "Submitted"
+                                                : row.status === "partial"
+                                                ? "Partial Delivery"
+                                                : row.status === "ready"
+                                                ? "Not Submitted"
+                                                : row.status === "cancel"
+                                                ? "Cancel"
+                                                : row.status === "production"
+                                                ? "On Progress"
+                                                : row.status === "new"
+                                                ? "New"
+                                                : ""
+                                        }}</span
+                                    >
+
+                                   
+                                </div>
                             </td>
                             <td class="p-1 w-60px">
                                 <div class="flex items-center justify-end p-1">
                                     <router-link
-                                        :to="'/desktop/threads/' + row.id"
+                                        :to="'/desktop/summary/' + row.id+'?back=' + route.path"
+                                    >
+                                        <div
+                                            class="text-xl px-2 py-1 text-[#667085] hover:bg-gray-100 rounded"
+                                            title="Summary"
+                                        >
+                                            <i class="ri-article-line"></i>
+                                        </div>
+                                    </router-link>
+
+                                    <router-link
+                                        :to="'/desktop/threads/' + row.id+'?back=' + route.path"
+                                        
                                     >
                                         <div
                                             class="text-xl px-2 py-1 text-[#667085] hover:bg-gray-100 rounded"
@@ -1217,42 +1532,16 @@ onMounted(() => {
                                             <i class="ri-chat-history-line"></i>
                                         </div>
                                     </router-link>
-                                    <!-- <router-link
-                                        :to="
-                                            '/desktop/projects/finance/' +
-                                            row.id
-                                        "
-                                    >
-                                        <div
-                                            class="text-xl px-2 py-1 text-[#667085] hover:bg-gray-100 rounded"
-                                            title="Invoice Progress"
-                                        >
-                                            <i
-                                                class="ri-secure-payment-line"
-                                            ></i>
-                                        </div>
-                                    </router-link>
                                     <router-link
                                         :to="
-                                            '/desktop/projects/followup/' +
-                                            row.id
+                                            '/desktop/projects/edit/' +
+                                            row.po_deposit
+                                            +'?back=' + route.path
                                         "
-                                        v-if="!row.is_po_deposit"
-                                    >
-                                        <div
-                                            class="text-xl px-2 py-1 text-[#667085] hover:bg-gray-100 rounded"
-                                            title="Marketing Follow Up"
-                                        >
-                                            <i
-                                                class="ri-customer-service-2-line"
-                                            ></i>
-                                        </div>
-                                    </router-link> -->
-                                    <router-link
-                                        :to="'/desktop/projects/edit/' + row.id"
                                         v-if="
-                                            user.position == 'marketing' ||
-                                            user.position == 'admin'
+                                            (user.position == 'marketing' ||
+                                                user.position == 'admin' || (user.position == 'design' && ['design','printing'].includes(row.project_type))) &&
+                                            !row.is_po_deposit
                                         "
                                     >
                                         <div
@@ -1268,7 +1557,7 @@ onMounted(() => {
                                         title="Delete"
                                         v-if="
                                             (user.position == 'marketing' ||
-                                                user.position == 'admin') &&
+                                                user.position == 'admin' || (user.position == 'design' && ['design','printing'].includes(row.project_type))) &&
                                             !row.is_po_deposit
                                         "
                                     >
@@ -1280,7 +1569,7 @@ onMounted(() => {
                     </tbody>
                 </table>
             </div>
-            <div class="flex justify-between px-6 py-2 items-center">
+            <!-- <div class="flex justify-between px-6 py-2 items-center">
                 <button
                     class="text-sm border rounded-md px-4 py-2 bg-white"
                     @click="prevPage"
@@ -1306,17 +1595,27 @@ onMounted(() => {
                 >
                     Next
                 </button>
-            </div>
+            </div> -->
         </div>
     </div>
     <Confirm
         type="fail"
         title="Delete Confirmation"
         content="Are you sure want to delete selected project?"
-        buttonText="Delete"
+        buttonText="Yes, Delete"
         :show="confirmDelete != false"
         @hide="confirmDelete = false"
         @fire="deleteSelectedProject"
+    >
+    </Confirm>
+    <Confirm
+        type="fail"
+        title="Cancel Confirmation"
+        content="Are you sure want to cancel selected project?"
+        buttonText="Yes, Cancel"
+        :show="confirmCancel != false"
+        @hide="confirmCancel = false"
+        @fire="cancelSelectedProject"
     >
     </Confirm>
 

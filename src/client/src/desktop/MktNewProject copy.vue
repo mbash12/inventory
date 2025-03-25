@@ -9,9 +9,6 @@ import {
     getClientList,
     nom,
     goto,
-    createPodeposit,
-    updatePodeposit,
-    getPodeposit
 } from "../services/service";
 import { useRoute, useRouter } from "vue-router";
 import { loading } from "../services/router";
@@ -20,7 +17,6 @@ import Alert from "../components/Alert.vue";
 import Select1 from "../components/Select1.vue";
 import INumber from "../components/INumber.vue";
 const confirmDelete = ref(false);
-const confirmSave = ref(false);
 const alertShowSuccess = ref(false);
 const alertShowFailed = ref(false);
 const route = useRoute();
@@ -44,24 +40,23 @@ const state = reactive({
     is_po_deposit: false,
     status: "new",
     products: [{ name: "", quantity: "", description: "" }],
-    tab: 0,
+    tab:0,
     prd: {
-        gimmick: null,
-        design: null,
-        printing: null,
-        payment: null,
+        gimmick: [{ name: "", quantity: "", description: "" }],
+        design: [{ name: "", quantity: "", description: "" }],
+        printing: [{ name: "", quantity: "", description: "" }],
+        payment: [{ name: "", quantity: "", description: "" }],
     },
-    documents: {
-        do: false,
-        bast: false,
-        gr: false,
+    documents:{
+        do:false,
+        bast:false,
+        gr:false
     },
-    back: null
 });
 
 const deleteSelectedProduct = () => {
     confirmDelete.value = false;
-    state.prd[state.selected_type].products.splice(state.selected, 1);
+    state.prd[state.selected_type].splice(state.selected, 1);
 };
 const setDelete = (type, i) => {
     state.selected = i;
@@ -70,63 +65,6 @@ const setDelete = (type, i) => {
 };
 const submit = () => {
     loading();
-    let i = 1;
-    const products = [
-        {
-            ...state.prd.gimmick,
-            title: state.title,
-            job_number:
-                state.job_number + "-" + (i++).toString().padStart(3, "0"),
-            client_po_date: state.client_po_date,
-            client_po_number: state.client_po_number,
-            client_company: state.client_company,
-            client_pic_name: state.client_pic_name,
-            total_price: state.total_price,
-            project_type: "gimmick",
-            documents: state.documents,
-        },
-        {
-            ...state.prd.design,
-            title: state.title,
-            job_number:
-                state.job_number + "-" + (i++).toString().padStart(3, "0"),
-            client_po_date: state.client_po_date,
-            client_po_number: state.client_po_number,
-            client_company: state.client_company,
-            client_pic_name: state.client_pic_name,
-            total_price: state.total_price,
-            project_type: "design",
-            documents: state.documents,
-        },
-        {
-            ...state.prd.printing,
-            title: state.title,
-            job_number:
-                state.job_number + "-" + (i++).toString().padStart(3, "0"),
-            client_po_date: state.client_po_date,
-            client_po_number: state.client_po_number,
-            client_company: state.client_company,
-            client_pic_name: state.client_pic_name,
-            total_price: state.total_price,
-            project_type: "printing",
-            documents: state.documents,
-        },
-        {
-            ...state.prd.payment,
-            title: state.title,
-            job_number:
-                state.job_number + "-" + (i++).toString().padStart(3, "0"),
-            client_po_date: state.client_po_date,
-            client_po_number: state.client_po_number,
-            client_company: state.client_company,
-            client_pic_name: state.client_pic_name,
-            total_price: state.total_price,
-            project_type: "payment",
-            documents: state.documents,
-        },
-    ];
-    // console.log(products)
-    // return 
     let data = {
         title: state.title,
         total_price: state.total_price,
@@ -137,11 +75,10 @@ const submit = () => {
         client_company: state.client_company,
         client_pic_name: state.client_pic_name,
         status: state.status,
-        products_group: products.filter((e) => e.products.filter((p) => p.name !== '').length > 0),
-        is_po_deposit: false,
+        products: state.products,
     };
     if (state.id === null) {
-        createPodeposit(data).then((r) => {
+        createProject(data).then((r) => {
             loading(false);
             if (r.code === 200) {
                 alertShowSuccess.value = true;
@@ -151,7 +88,7 @@ const submit = () => {
             }
         });
     } else {
-        updatePodeposit(state.id, data).then((r) => {
+        updateProject(state.id, data).then((r) => {
             loading(false);
             if (r.code === 200) {
                 alertShowSuccess.value = true;
@@ -161,50 +98,13 @@ const submit = () => {
             }
         });
     }
-    // console.log(data);
-    // if (state.id === null) {
-    //     createProject(data).then((r) => {
-    //         loading(false);
-    //         if (r.code === 200) {
-    //             alertShowSuccess.value = true;
-    //         } else {
-    //             state.errors = r.errors;
-    //             alertShowFailed.value = true;
-    //         }
-    //     });
-    // } else {
-    //     updateProject(state.id, data).then((r) => {
-    //         loading(false);
-    //         if (r.code === 200) {
-    //             alertShowSuccess.value = true;
-    //         } else {
-    //             state.errors = r.errors;
-    //             alertShowFailed.value = true;
-    //         }
-    //     });
-    // }
-};
-const generateProds = () => {
-    state.prd.gimmick = {
-        products: [{ name: "", quantity: "", description: "" }],
-    };
-    state.prd.design = {
-        products: [{ name: "", quantity: "", description: "" }],
-    };
-    state.prd.printing = {
-        products: [{ name: "", quantity: "", description: "" }],
-    };
-    state.prd.payment = {
-        products: [{ name: "", quantity: "", description: "" }],
-    };
 };
 onMounted(() => {
     state.pic_name = currentUser.user.user.name;
-    state.back = route.query.back;
     if (currentUrl.includes("edit")) {
         loading();
         let id = currentUrl.split("/").slice(-1);
-        getPodeposit(id).then((r) => {
+        getProject(id).then((r) => {
             loading(false);
             if (r.code === 200) {
                 let data = r.data;
@@ -218,53 +118,49 @@ onMounted(() => {
                 state.client_company = data.client_company;
                 state.client_pic_name = data.client_pic_name;
                 state.status = data.status;
+                state.is_po_deposit = data.is_po_deposit;
                 state.title = data.title;
                 state.total_price = data.total_price;
-                if (data.closed_at) {
-                    state.closed_at = dayjs(data.closed_at).format(
-                        "YYYY-MM-DD"
-                    );
-                } else {
-                    state.closed_at = null;
-                }
-                const projects = data.projects_data.map((e) => {
-                    return {
-                        ...e,
-                        products: e.products_data
-                    };
+                state.products = [...data.products_data];
+                state.products.forEach((e) => {
+                    if(e.type == 'gimmick') {
+                        state.prd.gimmick.push(e);
+                    } else if(e.type == 'design') {
+                        state.prd.design.push(e);
+                    } else if(e.type == 'printing') {
+                        state.prd.printing.push(e);
+                    } else if(e.type == 'payment') {
+                        state.prd.payment.push(e);
+                    }
                 })
-                state.documents = JSON.parse(projects[0].documents);
-                // console.log(state.documents)
-                generateProds();
-                const gimmick = projects.find(
-                    (e) => e.project_type === "gimmick"
-                );
-                const design = projects.find(
-                    (e) => e.project_type === "design"
-                );
-                const printing = projects.find(
-                    (e) => e.project_type === "printing"
-                );
-                const payment = projects.find(
-                    (e) => e.project_type === "payment"
-                );
-                if (gimmick) {
-                    state.prd.gimmick = gimmick;
+                if (data.client_po_number == null) {
+                    state.on_process = true;
                 }
-                if (design) {
-                    state.prd.design = design;
-                }
-                if (printing) {
-                    state.prd.printing = printing;
-                }
-                if (payment) {
-                    state.prd.payment = payment;
-                }
-                console.log(state.prd)
+                setTimeout(() => {
+                    if (data.manufacture !== null) {
+                        document
+                            .querySelectorAll(
+                                ".proform table input,.proform table  textarea,.proform table  select,.proform table  button"
+                            )
+                            .forEach((el) => {
+                                el.setAttribute("disabled", true);
+                            });
+                    }
+                    if (data.is_po_deposit) {
+                        document
+                            .querySelectorAll(
+                                ".proform input, .proform textarea, .proform .input"
+                            )
+                            .forEach((el) => {
+                                el.setAttribute("disabled", true);
+                                el.classList.remove("bg-white");
+                                el.classList.remove("bg-transparent");
+                                el.classList.add("bg-gray-50");
+                            });
+                    }
+                }, 500);
             }
         });
-    } else {
-        generateProds();
     }
 });
 </script>
@@ -276,7 +172,7 @@ onMounted(() => {
         >
             <div
                 class="cursor-pointer mr-4"
-                @click="goto(state.back+'?filter=true')"
+                @click="goto('/desktop/projects?filter=true')"
             >
                 <i class="ri-arrow-left-line"></i>
             </div>
@@ -328,7 +224,7 @@ onMounted(() => {
                 ">Product Is Readonly</span> -->
         </div>
         <form
-            @submit.prevent="confirmSave = true"
+            @submit.prevent="submit"
             class="w-full bg-white rounded-lg shadow p-8 proform"
         >
             <div class="flex gap-8">
@@ -615,7 +511,7 @@ onMounted(() => {
                             'Gimmick',
                             'Design',
                             'Printing',
-                            'Supplier Payment',
+                            'Supplier Payment'
                         ]"
                         :key="index"
                         :class="
@@ -625,24 +521,13 @@ onMounted(() => {
                         "
                         @click="
                             () => {
-                                state.tab = index;
+                                state.tab = index
                             }
                         "
                     >
                         {{ option }}
-                        <strong
-                            class="text-xs ml-1 px-1 rounded-full w-4 h-4"
-                            :class="
-                                state.tab === index
-                                    ? 'bg-red-200 text-red-500'
-                                    : 'bg-gray-200 text-gray-500'
-                            "
-                        >
-                            {{
-                                state.prd[Object.keys(state.prd)[index]]?.products.filter(
-                                    (e) => e.name !== null && e.name !== ""
-                                ).length
-                            }}
+                        <strong class="text-xs ml-1 px-1 rounded-full w-4 h-4" :class="state.tab === index ? 'bg-red-200 text-red-500' : 'bg-gray-200 text-gray-500'">
+                            {{ state.prd[Object.keys(state.prd)[index]].filter(e=> e.name !== null && e.name !== '' ).length }}
                         </strong>
                     </div>
                 </div>
@@ -666,7 +551,7 @@ onMounted(() => {
                         <tbody>
                             <tr
                                 class="border-b"
-                                v-for="(product, i) in state.prd.gimmick?.products"
+                                v-for="(product, i) in state.prd.gimmick"
                                 :key="i"
                             >
                                 <td class="">
@@ -757,6 +642,7 @@ onMounted(() => {
                                 <td class="p-1">
                                     <button
                                         type="button"
+                                        
                                         class="text-xl px-4 h-40px text-[#667085] hover:bg-gray-100 rounded"
                                         @click="setDelete('gimmick', i)"
                                     >
@@ -765,7 +651,7 @@ onMounted(() => {
                                 </td>
                             </tr>
                         </tbody>
-                        <tfoot>
+                        <tfoot >
                             <tr>
                                 <td colspan="4">
                                     <button
@@ -773,7 +659,7 @@ onMounted(() => {
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
                                         @click="
                                             () =>
-                                                state.prd.gimmick.products.push({
+                                                state.prd.gimmick.push({
                                                     name: '',
                                                     quantity: '',
                                                     description: '',
@@ -808,7 +694,7 @@ onMounted(() => {
                         <tbody>
                             <tr
                                 class="border-b"
-                                v-for="(product, i) in state.prd.design?.products"
+                                v-for="(product, i) in state.prd.design"
                                 :key="i"
                             >
                                 <td class="">
@@ -899,6 +785,7 @@ onMounted(() => {
                                 <td class="p-1">
                                     <button
                                         type="button"
+                                        
                                         class="text-xl px-4 h-40px text-[#667085] hover:bg-gray-100 rounded"
                                         @click="setDelete('design', i)"
                                     >
@@ -907,7 +794,7 @@ onMounted(() => {
                                 </td>
                             </tr>
                         </tbody>
-                        <tfoot>
+                        <tfoot >
                             <tr>
                                 <td colspan="4">
                                     <button
@@ -915,7 +802,7 @@ onMounted(() => {
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
                                         @click="
                                             () =>
-                                                state.prd.design.products.push({
+                                                state.prd.design.push({
                                                     name: '',
                                                     quantity: '',
                                                     description: '',
@@ -949,7 +836,7 @@ onMounted(() => {
                         <tbody>
                             <tr
                                 class="border-b"
-                                v-for="(product, i) in state.prd.printing?.products"
+                                v-for="(product, i) in state.prd.printing"
                                 :key="i"
                             >
                                 <td class="">
@@ -1040,6 +927,7 @@ onMounted(() => {
                                 <td class="p-1">
                                     <button
                                         type="button"
+                                        
                                         class="text-xl px-4 h-40px text-[#667085] hover:bg-gray-100 rounded"
                                         @click="setDelete('printing', i)"
                                     >
@@ -1048,7 +936,7 @@ onMounted(() => {
                                 </td>
                             </tr>
                         </tbody>
-                        <tfoot>
+                        <tfoot >
                             <tr>
                                 <td colspan="4">
                                     <button
@@ -1056,7 +944,7 @@ onMounted(() => {
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
                                         @click="
                                             () =>
-                                                state.prd.printing.products.push({
+                                                state.prd.printing.push({
                                                     name: '',
                                                     quantity: '',
                                                     description: '',
@@ -1090,7 +978,7 @@ onMounted(() => {
                         <tbody>
                             <tr
                                 class="border-b"
-                                v-for="(product, i) in state.prd.payment?.products"
+                                v-for="(product, i) in state.prd.payment"
                                 :key="i"
                             >
                                 <td class="">
@@ -1127,7 +1015,7 @@ onMounted(() => {
                                         class="flex items-center flex-col gap-1"
                                     >
                                         <input
-                                            type="text"
+                                        type="text"
                                             class="w-full h-40px px-4 text-sm bg-transparent"
                                             placeholder="e.g. : 83292092 "
                                             v-model="product.description"
@@ -1182,6 +1070,7 @@ onMounted(() => {
                                 <td class="p-1">
                                     <button
                                         type="button"
+                                        
                                         class="text-xl px-4 h-40px text-[#667085] hover:bg-gray-100 rounded"
                                         @click="setDelete('payment', i)"
                                     >
@@ -1190,7 +1079,7 @@ onMounted(() => {
                                 </td>
                             </tr>
                         </tbody>
-                        <tfoot>
+                        <tfoot >
                             <tr>
                                 <td colspan="4">
                                     <button
@@ -1198,7 +1087,7 @@ onMounted(() => {
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
                                         @click="
                                             () =>
-                                                state.prd.payment.products.push({
+                                                state.prd.payment.push({
                                                     name: '',
                                                     quantity: '',
                                                     description: '',
@@ -1214,34 +1103,18 @@ onMounted(() => {
                     </table>
                 </div>
 
-                <div class="text-sm text-[#667085] mt-12 mb-2">
-                    Choose Documents to be Uploaded
-                </div>
+                <div class="text-sm text-[#667085] mt-12 mb-2">Choose Documents to be Uploaded</div>
                 <div class="border p-3 flex justify-between rounded-lg mb-30">
                     <label class="input flex items-center gap-2">
-                        <input
-                            type="checkbox"
-                            :value="true"
-                            v-model="state.documents.do"
-                        />
-                        <span class="text-sm">DO (Delivery Order)</span>
+                        <input type="checkbox" :value="true" v-model="state.documents.do">
+                        <span class="text-sm">DO  (Delivery Order)</span>
                     </label>
                     <label class="input flex items-center gap-2">
-                        <input
-                            type="checkbox"
-                            :value="true"
-                            v-model="state.documents.bast"
-                        />
-                        <span class="text-sm"
-                            >BAST (Berita Acara Serah Terima)</span
-                        >
+                        <input type="checkbox" :value="true" v-model="state.documents.bast">
+                        <span class="text-sm">BAST  (Berita Acara Serah Terima)</span>
                     </label>
                     <label class="input flex items-center gap-2">
-                        <input
-                            type="checkbox"
-                            :value="true"
-                            v-model="state.documents.gr"
-                        />
+                        <input type="checkbox" :value="true" v-model="state.documents.gr">
                         <span class="text-sm">GR/TBP</span>
                     </label>
                     <span></span>
@@ -1251,7 +1124,7 @@ onMounted(() => {
                     <button
                         class="h-45px px-4 border bg-white rounded-lg gap-2 shadow text-gray-700 hover:shadow-sm hover:bg-gray-50 flex items-center"
                         type="button"
-                        @click="router.push(state.back+'?filter=true')"
+                        @click="router.push('/desktop/projects?filter=true')"
                     >
                         <i class="ri-close-circle-line text-xl"></i>
                         <strong>Cancel</strong>
@@ -1280,16 +1153,6 @@ onMounted(() => {
         @fire="deleteSelectedProduct"
     >
     </Confirm>
-    <Confirm
-        type="fail"
-        title="Save Confirmation"
-        content="Are you sure want to save project?"
-        buttonText="Yes, Save"
-        :show="confirmSave != false"
-        @hide="confirmSave = false"
-        @fire="submit"
-    >
-    </Confirm>
     <Alert
         type="failed"
         title="Failed to save"
@@ -1309,7 +1172,7 @@ onMounted(() => {
         @hide="
             () => {
                 alertShowSuccess = false;
-                router.push(state.back+'?filter=true');
+                router.push('/desktop/projects');
             }
         "
     ></Alert>

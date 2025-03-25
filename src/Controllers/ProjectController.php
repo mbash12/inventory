@@ -132,34 +132,57 @@ class ProjectController extends Controller
                 ->withSum(['inventories_data as delivered' => fn (Builder $query1) => $query1->where('warehouse', 2)], 'quantity')
                 ->withSum('products_data as total', 'quantity');
 
-            if ($request->has('action')) {
-                $actions = $request->input('action');
-                $query->whereHas('po_deposit_data', function ($query0) use ($actions) {
-                    $query0->whereHas('marketing_followups', function ($query1) use ($actions) {
-                        $query1->where(function ($query2) use ($actions) {
-                            if ($actions == 'overdue') {
-                                $query2->whereDate('schedule_date', '<', now())->whereNull('followup_date');
-                            }
-                            if ($actions == 'today') {
-                                $query2->whereDate('schedule_date', '=', now())->whereNull('followup_date');
-                            }
-                            if ($actions == 'future') {
-                                $query2->whereDate('schedule_date', '>', now())->whereNull('followup_date');
-                            }
-                        });
-                    });
-                });
-            }
-
+            // if ($request->has('action')) {
+            //     $actions = $request->input('action');
+            //     $query->whereHas('po_deposit_data', function ($query0) use ($actions) {
+            //         $query0->whereHas('marketing_followups', function ($query1) use ($actions) {
+            //             $query1->where(function ($query2) use ($actions) {
+            //                 if ($actions == 'overdue') {
+            //                     $query2->whereDate('schedule_date', '<', now())->whereNull('followup_date');
+            //                 }
+            //                 if ($actions == 'today') {
+            //                     $query2->whereDate('schedule_date', '=', now())->whereNull('followup_date');
+            //                 }
+            //                 if ($actions == 'future') {
+            //                     $query2->whereDate('schedule_date', '>', now())->whereNull('followup_date');
+            //                 }
+            //             });
+            //         });
+            //     });
+            // }
 
             if ($request->has('status')) {
                 $statuses = explode(',', $request->input('status'));
                 $query->whereIn('status', $statuses);
             }
+            if ($request->has('delivery')) {
+                $query->whereIn('project_type', ['gimmick','printing']);
+            }
+
+            if ($request->has('noinvoice')) {
+                $query->where(function ($query) {
+                    $query->whereNull('invoice_status')
+                          ->orWhere('invoice_status', 'new')
+                          ->orWhere('invoice_status', 'progress');
+                });
+            }
+
+            if ($request->has('client')) {
+                $query->where('client_company', $request->input('client'));
+            }
+
+            if ($request->has('project_type')) {
+                $projectTypes = explode(',', $request->input('project_type'));
+                $query->whereIn('project_type', $projectTypes);
+            }
+
+            if ($request->has('type')) {
+                $query->where('project_type', $request->input('type'));
+            }
 
             if ($request->has('invoice')) {
-                $invoicees = $request->input('invoice');
-                $query->where('invoice_status', $invoicees);
+                $invoicees = explode(',', $request->input('invoice'));
+                $query->whereIn('invoice_status', $invoicees);
                 // $query->whereHas('po_deposit_data', function ($query0) use ($invoicees) {
                 //     $query0->where('invoice_status', $invoicees);
                 // });
@@ -185,7 +208,11 @@ class ProjectController extends Controller
                 $query->where(function ($query) use ($dateField) {
                     $query->orWhereDate('po_deadline', $dateField)
                           ->orWhereDate('production_deadline', $dateField)
-                          ->orWhereDate('delivery_deadline', $dateField);
+                          ->orWhereDate('delivery_deadline', $dateField)
+                          ->orWhereDate('do_deadline', $dateField)
+                          ->orWhereDate('design_deadline', $dateField)
+                          ->orWhereDate('bast_deadline', $dateField)
+                          ->orWhereDate('gr_deadline', $dateField);
                 });
             }
             if ($request->has('po')) {
@@ -213,13 +240,14 @@ class ProjectController extends Controller
                 });
             }
             if ($request->has('delivery')) {
-                $query->where(function ($query0) {
-                    $query0->where('is_po_deposit', false)
-                        ->orWhere(function ($query1) {
-                            $query1->where('is_po_deposit', true)
-                                ->whereNotNull('sent_to_del_at');
-                        });
-                });
+                $query->whereNot('status',  'cancel');
+                // $query->where(function ($query0) {
+                //     $query0->where('is_po_deposit', false)
+                //         ->orWhere(function ($query1) {
+                //             $query1->where('is_po_deposit', true)
+                //                 ->whereNotNull('sent_to_del_at');
+                //         });
+                // });
             }
 
             $query->orderBy($request->input('order_by', 'id'), $request->input('sort', 'desc'));
@@ -344,6 +372,29 @@ class ProjectController extends Controller
 
             $result['products_data'] = array_map(function ($item) {
                 $item['delivered'] =  (int) DeliveryItem::where('product', $item['id'])->whereNot('delivered_at', NULL)->where('destination', 2)->sum('actual_quantity');
+                $item['deliveries'] = DeliveryItem::where('product', $item['id'])
+                    ->with(['delivery_data' => function($query) {
+                        $query->select('id', 'do_number', 'do_file', 'do_files');
+                    }])
+                    ->whereHas('delivery_data', function($query) {
+                        $query->whereNotNull('do_number');
+                    })
+                    ->get()
+                    ->map(function($deliveryItem) {
+                        $do_files = [];
+                        if ($deliveryItem->delivery_data->do_file) {
+                            $do_files[] = $deliveryItem->delivery_data->do_file;
+                        }
+                        if ($deliveryItem->delivery_data->do_files) {
+                            $additional_files = json_decode($deliveryItem->delivery_data->do_files, true) ?? [];
+                            $do_files = array_merge($do_files, $additional_files);
+                        }
+                        return [
+                            'do_number' => $deliveryItem->delivery_data->do_number,
+                            'quantity' => $deliveryItem->actual_quantity,
+                            'do_files' => array_values(array_unique($do_files))
+                        ];
+                    });
                 return $item;
             }, $result['products_data']);
 
@@ -396,6 +447,43 @@ class ProjectController extends Controller
                 "expense" => $request->total_price,
             ]);
 
+            $status = $request->status;
+
+
+            if($request->project_type == 'design') {
+                $products = $request->products;
+                $hasDesignApproved = false;
+                $allHaveDesignFiles = true;
+
+                foreach ($products as $product) {
+                    if (isset($product['design_approved']) && $product['design_approved'] === true) {
+                        $hasDesignApproved = true;
+                    }
+                    if (!isset($product['design_files']) || empty($product['design_files'])) {
+                        $allHaveDesignFiles = false;
+                    }
+                }
+
+                if ($hasDesignApproved) {
+                    $status = 'production';
+                }
+                if ($allHaveDesignFiles) {
+                    $status = 'ready';
+                }
+            }
+
+            $documents = json_decode($request->documents);
+            error_log($request->bast_files);
+            $request->bast_files = $request->bast_files === 'null' ? null : $request->bast_files;
+            $request->gr_files = $request->gr_files === 'null'? null : $request->gr_files;
+            $request->bast_files = $request->bast_files === 'null'? null : $request->bast_files;
+            $request->gr_files = $request->gr_files === 'null'? null : $request->gr_files;
+            
+            if ($request->project_type == 'design' && $request->bast_files !== null &&  $request->bast_files !== '[]') {
+                if (!$documents->gr || ($documents->gr && $request->gr_files !== null &&  $request->gr_files !== '[]')) {
+                    $status = 'delivered';
+                }
+            }
             $item->update([
                 "title" => $request->title,
                 "job_number" => $request->job_number,
@@ -410,7 +498,13 @@ class ProjectController extends Controller
                 // "client_pic_phone" => $request->client_pic_phone,
                 // "shipping_vendor" => $request->shipping_vendor,
                 // "manufacture" => $request->manufacture,
-                "status" => $request->status,
+
+                "status" => $status,
+                "documents" => $request->documents,
+                "project_type" => $request->project_type,
+                "bast_files" => $request->bast_files,
+                "gr_files" => $request->gr_files,
+                "do_files" => $request->do_files,
             ]);
 
             $existingProducts = $item->products_data()->get();
@@ -436,5 +530,167 @@ class ProjectController extends Controller
         } catch (ModelNotFoundException $e) {
             return response()->json(['code' => 404, 'data' => []]);
         }
+    }
+
+
+    public function todo(Request $request)
+    {
+        // try {
+            $query = Project::with('products_data', 'shipping_vendors_data', 'po_deposit_data', 'deliveries_data')
+                ->withSum('products_data as total', 'quantity')
+                ->where(function($query) {
+                    $query
+                        ->where('client_po_number', null)
+                        ->orWhere(function($q) {
+                            $q->where('project_type', 'gimmick')
+                              ->whereNull('do_files')
+                              ->orWhere('do_files','null');
+                        })
+                        ->orWhere(function($q) {
+                            $q->where('project_type', 'printing')
+                              ->whereNull('do_files')
+                              ->orWhere('do_files','null');
+                        })
+                        ->orWhere(function($q) {
+                            $q->where('project_type', 'design')
+                              ->whereNull('bast_files')
+                              ->orWhere('bast_files','null');
+                        })
+                        ->orWhere(function($q) {
+                            $q->where('project_type', 'payment')
+                              ->whereNull('gr_files');
+                        })
+                        ->orWhere(function($q) {
+                            $q->whereRaw("JSON_EXTRACT(documents, '$.gr') IS NULL OR JSON_EXTRACT(documents, '$.gr') = 'false'")
+                              ->whereNull('gr_files');
+                        });
+                })->whereNot('status', 'cancel')->where('is_real', true)->whereNot('invoice_status', 'sent');
+
+                if ($request->has('filter_date')) {
+                    $dateField = $request->input('filter_date');
+                    $query->where(function ($query) use ($dateField) {
+                        $query->orWhereDate('po_deadline', $dateField)
+                              ->orWhereDate('production_deadline', $dateField)
+                              ->orWhereDate('delivery_deadline', $dateField)
+                              ->orWhereDate('do_deadline', $dateField)
+                              ->orWhereDate('design_deadline', $dateField)
+                              ->orWhereDate('bast_deadline', $dateField)
+                              ->orWhereDate('gr_deadline', $dateField);
+                    });
+                }
+
+            // if ($request->has('noinvoice')) {
+            //     $query->where(function ($query) {
+            //         $query->whereNull('invoice_status')
+            //               ->orWhere('invoice_status', 'new')
+            //               ->orWhere('invoice_status', 'progress');
+            //     });
+            // }
+
+            if ($request->has('project_type')) {
+                $projectTypes = explode(',', $request->input('project_type'));
+                $query->whereIn('project_type', $projectTypes);
+            }
+
+            if ($request->has('search')) {
+                $search = $request->input('search');
+                $query->where(function ($query0) use ($search) {
+                    $query0->where('job_number', 'like', '%' . $search . '%')
+                        ->orWhere('title', 'like', '%' . $search . '%')
+                        ->orWhere('client_po_number', 'like', '%' . $search . '%')
+                        ->orWhere('client_company', 'like', '%' . $search . '%')
+                        ->orWhere('client_pic_name', 'like', '%' . $search . '%')
+                        ->orWhereHas('products_data', function ($query1) use ($search) {
+                            $query1->where('name', 'like', '%' . $search . '%');
+                        });
+                });
+            }
+
+            $query->orderBy($request->input('order_by', 'id'), $request->input('sort', 'desc'));
+
+            $totalRecords = $query->count();
+            $limit = (int) $request->input('limit', 10);
+            $currentPage = (int) $request->input('page', 1);
+            $offset = ($currentPage - 1) * $limit;
+
+            $query->offset($offset)->limit($limit);
+
+            $results = $query->get();
+
+            $transformedData = $results->map(function ($project) {
+                $depositStatus = 'non-deposit';
+                if ($project->is_po_deposit) {
+                    $depositStatus = $project->is_real ? 'actual' : 'non-actual';
+                }
+
+                $poStatus = $project->po_deposit_data && $project->po_deposit_data->client_po_number ? 'available' : 'not available';
+                
+                $doStatus = 'not applicable';
+                if (in_array($project->project_type, ['gimmick', 'printing'])) {
+                    $deliveries = $project->deliveries_data;
+                    if ($deliveries->isEmpty()) {
+                        $doStatus = 'not uploaded';
+                    } else {
+                        $allDeliveriesHaveDO = $deliveries->every(function($delivery) {
+                            return (!empty($delivery->do_files) && $delivery->do_files !== '[]') || !empty($delivery->do_file);
+                        });
+                        $doStatus = $allDeliveriesHaveDO ? 'uploaded' : 'not uploaded';
+                    }
+                }
+
+                $designApproved = 'not applicable';
+                $designFiles = 'not applicable';
+                if ($project->project_type === 'design' && $project->products_data->isNotEmpty()) {
+                    $designApproved = $project->products_data->contains('design_approved', true) ? 'approved' : 'not approved';
+                    $designFiles = $project->products_data->contains(function($product) {
+                        return !empty($product->design_files);
+                    }) ? 'uploaded' : 'not uploaded';
+                }
+
+                $bastStatus = 'not applicable';
+                if ($project->project_type === 'design') {
+                    $bastStatus = $project->bast_files ? 'uploaded' : 'not uploaded';
+                }
+
+                $grStatus = 'not applicable';
+                $documents = json_decode($project->documents, true);
+                if ($documents && isset($documents['gr']) && $documents['gr']) {
+                    $grStatus = $project->gr_files ? 'uploaded' : 'not uploaded';
+                }
+
+                return [
+                    'id' => $project->id,
+                    'project_type' => $project->project_type,
+                    'title' => $project->title,
+                    'client_company' => $project->client_company,
+                    'client_pic_name' => $project->client_pic_name,
+                    'client_po_number' => $project->client_po_number,
+                    'client_po_date' => $project->client_po_date,
+                    'job_number' => $project->job_number,
+                    'deposit_status' => $depositStatus,
+                    'po_status' => $poStatus,
+                    'do_status' => $doStatus,
+                    'design_approved' => $designApproved,
+                    'design_files' => $designFiles,
+                    'bast_status' => $bastStatus,
+                    'gr_status' => $grStatus,
+                    'status' => $project->status,
+                    'deadline_meta' => $project->deadline_meta
+                ];
+            });
+
+            return response()->json([
+                'code' => 200,
+                'data' => $transformedData,
+                'meta' => [
+                    'total_records' => $totalRecords,
+                    'total_pages' => ceil($totalRecords / $limit),
+                    'current_page' => $currentPage,
+                    'limit_per_page' => $limit,
+                ]
+            ]);
+        // } catch (\Throwable $th) {
+        //     return response()->json(['code' => 404, 'data' => []]);
+        // }
     }
 }

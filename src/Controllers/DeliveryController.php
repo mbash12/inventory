@@ -4,7 +4,7 @@ namespace Src\Controllers;
 
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Carbon;
-
+use Illuminate\Support\Facades\URL;
 use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Symfony\Component\HttpFoundation\Response;
 use Illuminate\Support\Facades\Validator;

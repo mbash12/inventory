@@ -22,6 +22,8 @@ class Product extends Model
         'total_price',
         'is_production',
         'date',
+        'design_files',
+        'design_approved'
     ];
 
     protected $casts = [
@@ -34,8 +36,8 @@ class Product extends Model
     {
         return $this->belongsTo(Project::class);
     }
-    public function delivery_items_data(): HasMay
+    public function delivery_items_data(): HasMany
     {
-        return $this->hasMany(DeliveryItem::class, "product");
+        return $this->hasMany(DeliveryItem::class, "product")->with('delivery_data');
     }
 }

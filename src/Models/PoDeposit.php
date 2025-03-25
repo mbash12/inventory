@@ -23,8 +23,6 @@ class PoDeposit extends Model
         'client_po_number',
         'client_company',
         'client_pic_name',
-        'client_pic_name',
-        'client_pic_name',
         'pic_name',
         'status',
         'purchase_ordres',
@@ -33,7 +31,9 @@ class PoDeposit extends Model
         'closed_at',
         'budget',
         'expense',
-        'balance'
+        'balance',
+        'title',
+        'total_price'
     ];
     
     protected $casts = [

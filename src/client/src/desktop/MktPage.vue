@@ -5,9 +5,12 @@ import MktLayout from "./MktLayout.vue";
 
 <template>
     <MktLayout>
-        <RouterView></RouterView>
+      <template #default="{ layoutData }">
+        <RouterView :layoutData="layoutData" />
+      </template>
     </MktLayout>
-</template>
+  </template>
+  
 
 <style>
 input.noicon::-webkit-inner-spin-button,
