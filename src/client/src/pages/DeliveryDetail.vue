@@ -163,7 +163,7 @@ const submit = () => {
                 >
             </div>
         </a>
-        <div class="flex-1 flex flex-col min-h-0">
+        <div class="flex-1 flex flex-col min-h-0 overflow-auto">
             <div class="flex-1 flex flex-col min-h-0">
                 <div
                     class="min-h-full min-w-full flex flex-col bg-gray-50 flex-1"
@@ -259,7 +259,7 @@ const submit = () => {
                             >Foto Surat Jalan</span
                         >
                     </div>
-                    <div class="flex gap-2 overflow-auto w-full p-2 border-b">
+                    <div class="flex gap-2  w-full p-2 border-b">
                         <div
                             class="w-80px h-80px flex-shrink-0 relative border rounded flex flex-col items-center justify-center"
                             v-if="state.edit || state.data?.status != 'delivered'"
@@ -302,7 +302,7 @@ const submit = () => {
                             >Foto Barang Diterima</span
                         >
                     </div>
-                    <div class="flex gap-2 overflow-auto w-full p-2 border-b">
+                    <div class="flex gap-2  w-full p-2 border-b">
                         <div
                             class="w-80px h-80px flex-shrink-0 relative border rounded flex flex-col items-center justify-center"
                             v-if="state.edit || state.data?.status != 'delivered'"
@@ -367,7 +367,7 @@ const submit = () => {
                             >{{ state.data?.shipping_vendor_data?.name }}</span
                         >
                     </div>
-                    <div class="flex-1 overflow-auto">
+                    <div class="flex-1 ">
                         <button
                             type="button"
                             v-for="(item, i) in state.data?.delivery_items_data"

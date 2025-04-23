@@ -109,13 +109,13 @@ onMounted(() => {
     // getNotif();
 });
 const menus = [
-    {
-        icon: "ri-article-fill",
-        title: "Projects",
-        activeon: "projects",
-        link: "/projects",
-        roles: ["marketing", "admin", "finance","delivery"],
-    },
+    // {
+    //     icon: "ri-article-fill",
+    //     title: "Projects",
+    //     activeon: "projects",
+    //     link: "/projects",
+    //     roles: ["marketing", "admin", "finance","delivery"],
+    // },
     {
         icon: "ri-article-fill",
         title: "Delivery",

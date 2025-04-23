@@ -1,7 +1,7 @@
 import { apilist } from "./apilist";
 import { reactive, ref } from "vue";
-// export const URLL = "";
-export const URLL = "http://localhost:8000";
+export const URLL = "";
+// export const URLL = "http://localhost:8000";
 // export const URLL = "https://invdev.pelangiservice.com";
 export const APIURL = URLL + "/api";
 export const ASSETSURL = URLL + "/storage/";
@@ -112,6 +112,7 @@ export const createClient = async (data) => await api("createClient", { body: da
 export const updateClient = async (id, data) => await api("updateClient", { route: "/" + id, body: data });
 export const deleteClient = async (id) => await api("deleteClient", { route: "/" + id });
 export const getProjectList = async (filters) => await api("getProjectList", { params: filters });
+export const getProjectLists = async (filters) => await api("finance", { params: filters });
 export const getProject = async (id) => await api("getProject", { route: "/" + id });
 export const createProject = async (data) => await api("createProject", { body: data });
 export const updateProject = async (id, data) => await api("updateProject", { route: "/" + id, body: data });

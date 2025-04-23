@@ -6,7 +6,10 @@ BEFORE DEPLOY
 
 
 ====================================================
+
+
 IMPORT INVOICE DATA FROM PROJECTS TO PODEPOSIT
+
 ```sql
 UPDATE po_deposits pd
 SET total_price = (
@@ -18,10 +21,16 @@ invoice_status = (
     SELECT 
         CASE 
             WHEN COUNT(CASE WHEN p.invoice_status = 'sent' THEN 1 END) >= 
-                 COUNT(CASE WHEN p.invoice_status = 'progress' THEN 1 END) 
+                 COUNT(CASE WHEN p.invoice_status = 'progress' THEN 1 END) AND
+                 COUNT(CASE WHEN p.invoice_status = 'sent' THEN 1 END) >= 
+                 COUNT(CASE WHEN p.invoice_status = 'new' THEN 1 END)
             THEN 'sent'
-            WHEN COUNT(CASE WHEN p.invoice_status = 'progress' THEN 1 END) > 0 
+            WHEN COUNT(CASE WHEN p.invoice_status = 'progress' THEN 1 END) > 0 AND
+                 COUNT(CASE WHEN p.invoice_status = 'progress' THEN 1 END) >= 
+                 COUNT(CASE WHEN p.invoice_status = 'new' THEN 1 END)
             THEN 'progress'
+            WHEN COUNT(CASE WHEN p.invoice_status = 'new' THEN 1 END) > 0
+            THEN 'new'
             ELSE NULL
         END
     FROM projects p 
@@ -33,8 +42,9 @@ invoices = (
     WHERE p.po_deposit = pd.id
     ORDER BY 
         CASE p.invoice_status 
-            WHEN 'sent' THEN 3
-            WHEN 'progress' THEN 2
+            WHEN 'sent' THEN 4
+            WHEN 'progress' THEN 3
+            WHEN 'new' THEN 2
             ELSE 1
         END DESC
     LIMIT 1
@@ -45,6 +55,7 @@ invoices = (
 
 
 IMPORT DO DATA FROM DELIVERY TO PROJECTS
+
 ```sql
 UPDATE projects p
 SET do_files = (

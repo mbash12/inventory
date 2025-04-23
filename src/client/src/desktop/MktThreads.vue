@@ -243,12 +243,20 @@ const loadData = () => {
             //     state.showUpdateButton = true;
             // }
 
-            // if (
-            //     user.position == "finance" &&
-            //     ((data?.is_real == 0 && data?.is_po_deposit) ||
-            //         (data?.is_real == 1 && !data?.is_po_deposit))
-            // )
-            //     state.showUpdateButton = true;
+            if (
+                user.position == "finance"
+            ){
+                if(((data?.is_real == 0 && data?.is_po_deposit) ||
+                (data?.is_real == 1 && !data?.is_po_deposit))){
+                    state.showUpdateButton = true;
+                }else{
+                    state.showUpdateButton = false;
+                }
+            }else{
+                state.showUpdateButton = true;
+            }
+            
+            // if(user.position == "finance" && data?.is_real == 0 && data?.is_po_deposit) state.showUpdateButton = true
 
             state.invoiced_amount = state.data?.remaining_amount ?? state.data?.total_price
         }
@@ -286,8 +294,8 @@ onMounted(() => {
                 <button
                     class="h-45px px-4 border border-red-300 bg-red-500 rounded-lg gap-2 shadow text-white hover:shadow-sm hover:bg-red-600 flex items-center"
                     @click="() => (state.form_open = true)"
+                    v-if="state.showUpdateButton"
                     >
-                    <!-- v-if="state.showUpdateButton" -->
                     <strong>Update</strong>
                     <i class="ri-send-plane-line text-xl"></i>
                 </button>
@@ -378,17 +386,7 @@ onMounted(() => {
                                 >
                                     Set PO Number
                                 </div>
-                                <div
-                                    class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer"
-                                    :class="
-                                        state.mkt_tab == 2
-                                            ? 'text-red-500'
-                                            : 'text-gray-400'
-                                    "
-                                    @click="() => (state.mkt_tab = 2)"
-                                >
-                                    Cancel Project
-                                </div>
+                                
                             </div>
                             <div
                                 class="flex h-10 w-full bg-gray-50 rounded-md mb-2"
@@ -453,6 +451,17 @@ onMounted(() => {
                                     @click="() => (state.inv_tab = 2)"
                                 >
                                     Delete Invoice
+                                </div>
+                                <div
+                                    class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer"
+                                    :class="
+                                        state.inv_tab == 3
+                                            ? 'text-red-500'
+                                            : 'text-gray-400'
+                                    "
+                                    @click="() => (state.inv_tab = 3)"
+                                >
+                                    Cancel Project
                                 </div>
                             </div>
                             <div
@@ -747,10 +756,10 @@ onMounted(() => {
                                 </label>
                             </div>
                             <div
-                                class="flex gap-4 w-full"
+                                class="flex gap-4 w-full mt-4"
                                 v-if="
-                                    user.position == 'marketing' &&
-                                    state.mkt_tab == 2
+                                    user.position == 'finance' &&
+                                    state.inv_tab == 3
                                 "
                             >
                                 <label class="flex flex-col gap-2 flex-1">
@@ -1008,7 +1017,7 @@ onMounted(() => {
 
                                 <label
                                     class="flex flex-col gap-2 flex-1"
-                                    v-if="state.inv_tab != 2"
+                                    v-if="state.inv_tab != 2 && state.inv_tab != 3"
                                 >
                                     <span class="text-sm text-left"
                                         >Status</span

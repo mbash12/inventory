@@ -108,7 +108,7 @@ class ReportController extends Controller
             )
                 ->leftJoinSub($poDepositQuery->clone()
                     ->where('is_po_deposit', true)
-                    ->where('invoice_status', '!=', 'sent')
+                    ->whereIn('invoice_status', ['progress', 'new'])
                     ->selectRaw('MONTH(client_po_date) as month, SUM(total_price) as total')
                     ->groupBy('month'),
                     'po_data',
@@ -127,7 +127,7 @@ class ReportController extends Controller
             )
                 ->leftJoinSub($poDepositQuery->clone()
                     ->where('is_po_deposit', false)
-                    ->where('invoice_status', '!=', 'sent')
+                    ->whereIn('invoice_status', ['progress', 'new'])
                     ->selectRaw('MONTH(client_po_date) as month, SUM(total_price) as total')
                     ->groupBy('month'),
                     'po_data',
@@ -249,7 +249,7 @@ class ReportController extends Controller
             // 12. PO breakdown by month
             $poBreakdown = DB::table('po_deposits')
             ->select('client_company')
-            ->selectRaw('SUM(CASE WHEN invoice_status != "sent" THEN total_price ELSE 0 END) as not_issued')
+            ->selectRaw('SUM(CASE WHEN invoice_status IN ("progress", "new") THEN total_price ELSE 0 END) as not_issued')
             ->selectRaw('SUM(CASE WHEN invoice_status = "sent" THEN total_price ELSE 0 END) as issued')
             ->selectRaw('SUM(total_price) as total')
             ->whereYear('client_po_date', $year)

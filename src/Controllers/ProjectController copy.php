@@ -294,21 +294,6 @@ class ProjectController extends Controller
                 $query->whereIn('status', $statuses);
             }
             
-            if ($request->has('project_type')) {
-                $projectType = $request->input('project_type');
-                
-                if ($projectType === 'nondeposits') {
-                    // For non-deposits, select only the first project per po_deposit
-                    $query->whereIn('id', function($subquery) {
-                        $subquery->select(\DB::raw('MIN(id)'))
-                            ->from('projects')
-                            ->groupBy('po_deposit');
-                    })->where('is_po_deposit', false);
-                } elseif ($projectType === 'deposits') {
-                    // For deposits, return all non-real projects
-                    $query->where('is_real', false);
-                }
-            }
 
             if ($request->has('invoice')) {
                 $invoicees = explode(',', $request->input('invoice'));
@@ -374,8 +359,6 @@ class ProjectController extends Controller
             return response()->json(['code' => 404, 'data' => []]);
         }
     }
-
-    
     public function store(Request $request)
     {
         $rules = [

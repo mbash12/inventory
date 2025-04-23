@@ -66,6 +66,7 @@ Route::apiResource('shipping-vendors', ShippingVendorController::class);
 Route::get('projects/snippet/{id}', [ProjectController::class, 'snippet']);
 Route::get('projects/todo', [ProjectController::class, 'todo']);
 Route::put('projects/delivery/{id}', [ProjectController::class, 'delivery']);
+Route::get('projects/finance', [ProjectController::class, 'indexes']);
 Route::apiResource('projects', ProjectController::class);
 Route::get('po-deposits/migrate', [PoDepositController::class, 'migrate']);
 Route::apiResource('po-deposits', PoDepositController::class);

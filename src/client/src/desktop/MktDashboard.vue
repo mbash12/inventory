@@ -399,16 +399,16 @@ onMounted(async () => {
                             </th>
                             <th>
                                 <span class="text-red-500">
-                                    Not Issued
+                                    Not Invoiced
                                 </span>
                             </th>
                             <th>
                                 <span class="text-green-500">
-                                    Issued
+                                    Invoiced
                                 </span>
                             </th>
                             <th>
-                                Grand Total
+                                Grand Total PO
                             </th>
                         </tr>
                     </thead>

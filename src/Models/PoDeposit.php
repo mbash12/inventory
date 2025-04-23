@@ -33,7 +33,8 @@ class PoDeposit extends Model
         'expense',
         'balance',
         'title',
-        'total_price'
+        'total_price',
+        'invoice_pic'
     ];
     
     protected $casts = [

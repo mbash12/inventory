@@ -147,50 +147,9 @@ class ThreadsController extends Controller
 
         return response()->json(['code' => 200, 'data' => $deadlines]);
     }
-    public function store(Request $request)
+
+    private function updateProjectAndDepositOnly($proj, $deposit, $request, &$meta, &$deadlinemeta)
     {
-        $rules = [
-            'project' => 'required|exists:projects,id',
-            'note' => 'nullable|string',
-            'thread_type' => 'required|string',
-
-            'production_deadline' => 'nullable|date',
-            'delivery_deadline' => 'nullable|date',
-            'po_deadline' => 'nullable|date',
-
-            'invoice_number' => 'nullable|string',
-            'invoice_date' => 'nullable|date',
-            'invoice_pic' => 'nullable|string',
-            'invoice_status' => 'nullable|string',
-
-            'client_po_number' => 'nullable|string',
-            'client_po_date' => 'nullable|date',
-
-        ];
-        $validator = Validator::make($request->all(), $rules);
-        if ($validator->fails()) {
-            return response()->json([
-                'code' => 422,
-                'errors' => $validator->errors()
-            ]);
-        }
-        // return $request->all();
-        // try {
-
-        $note = $request->get('note') . "\r\n";
-        $meta = [];
-
-        $proj = Project::findOrFail($request->get('project'));
-        $deposit = PoDeposit::findOrFail($proj['po_deposit']);
-        
-        // Get related projects if po_deposit is not marked as deposit
-        $relatedProjects = [];
-        if (!$deposit['is_po_deposit']) {
-            $relatedProjects = Project::where('po_deposit', $proj['po_deposit'])
-                ->where('id', '!=', $proj['id'])
-                ->get();
-        }
-
         if (!empty($request->get('client_po_number')) && !empty($request->get('client_po_date'))) {
             $proj['client_po_number'] = $request->get('client_po_number');
             $proj['client_po_date'] = $request->get('client_po_date');
@@ -198,18 +157,106 @@ class ThreadsController extends Controller
             $deposit['client_po_number'] = $request->get('client_po_number');
             $deposit['client_po_date'] = $request->get('client_po_date');
 
-            // Update related projects if not a deposit
-            if (!$deposit['is_po_deposit']) {
-                foreach ($relatedProjects as $relatedProj) {
-                    $relatedProj['client_po_number'] = $request->get('client_po_number');
-                    $relatedProj['client_po_date'] = $request->get('client_po_date');
-                    $relatedProj->save();
-                }
-            }
-
             $meta["client_po_number"] = $request->get('client_po_number');
             $meta["client_po_date"] = $request->get('client_po_date');
         }
+
+        $reminder = null;
+        $deadline = null;
+
+        if (!empty($request->get('production_deadline'))) {
+            if ($proj['status'] == "new") {
+                $proj['status'] = "production";
+            }
+            $proj['production_deadline'] = $request->get('production_deadline');
+            $reminder = date('Y-m-d', strtotime($request->get('production_deadline')));
+            $deadline = $request->get('production_deadline');
+
+            $meta["production_deadline"] = $request->get('production_deadline');
+            $meta["production_deadline_alert"] = date('Y-m-d', strtotime($request->get('production_deadline')));
+            $deadlinemeta['production_deadline'] = [
+                "date" => $request->get('production_deadline'),
+                "reminder" => $reminder
+            ];
+        }
+
+        if (!empty($request->get('delivery_deadline'))) {
+            $proj['delivery_deadline'] = $request->get('delivery_deadline');
+            $reminder = date('Y-m-d', strtotime($request->get('delivery_deadline')));
+            $deadline = $request->get('delivery_deadline');
+
+            $meta["delivery_deadline"] = $request->get('delivery_deadline');
+            $meta["delivery_deadline_alert"] = date('Y-m-d', strtotime($request->get('delivery_deadline')));
+            $deadlinemeta['delivery_deadline'] = [
+                "date" => $request->get('delivery_deadline'),
+                "reminder" => $reminder
+            ];
+        }
+
+        if (!empty($request->get('po_deadline'))) {
+            $proj['po_deadline'] = $request->get('po_deadline');
+            $reminder = date('Y-m-d', strtotime($request->get('po_deadline')));
+            $deadline = $request->get('po_deadline');
+
+            $meta["po_deadline"] = $request->get('po_deadline');
+            $meta["po_deadline_alert"] = date('Y-m-d', strtotime($request->get('po_deadline')));
+            $deadlinemeta['po_deadline'] = [
+                "date" => $request->get('po_deadline'),
+                "reminder" => $reminder
+            ];
+        }
+
+        if (!empty($request->get('do_deadline'))) {
+            $proj['do_deadline'] = $request->get('do_deadline');
+            $reminder = date('Y-m-d', strtotime($request->get('do_deadline')));
+            $deadline = $request->get('do_deadline');
+
+            $meta["do_deadline"] = $request->get('do_deadline');
+            $deadlinemeta['do_deadline'] = [
+                "date" => $request->get('do_deadline'),
+                "reminder" => $reminder
+            ];
+        }
+
+        if (!empty($request->get('design_deadline'))) {
+            $proj['design_deadline'] = $request->get('design_deadline');
+            $reminder = date('Y-m-d', strtotime($request->get('design_deadline')));
+            $deadline = $request->get('design_deadline');
+
+            $meta["design_deadline"] = $request->get('design_deadline');
+            $deadlinemeta['design_deadline'] = [
+                "date" => $request->get('design_deadline'),
+                "reminder" => $reminder
+            ];
+        }
+
+        if (!empty($request->get('bast_deadline'))) {
+            $proj['bast_deadline'] = $request->get('bast_deadline');
+            $reminder = date('Y-m-d', strtotime($request->get('bast_deadline')));
+            $deadline = $request->get('bast_deadline');
+
+            $meta["bast_deadline"] = $request->get('bast_deadline');
+            $deadlinemeta['bast_deadline'] = [
+                "date" => $request->get('bast_deadline'),
+                "reminder" => $reminder
+            ];
+        }
+
+        if (!empty($request->get('gr_deadline'))) {
+            $proj['gr_deadline'] = $request->get('gr_deadline');
+            $reminder = date('Y-m-d', strtotime($request->get('gr_deadline')));
+            $deadline = $request->get('gr_deadline');
+
+            $meta["gr_deadline"] = $request->get('gr_deadline');
+            $deadlinemeta['gr_deadline'] = [
+                "date" => $request->get('gr_deadline'),
+                "reminder" => $reminder
+            ];
+        }
+    }
+
+    private function updateProjectAndAllRelated($proj, $deposit, $relatedProjects, $request, &$meta, &$deadlinemeta)
+    {
         if (!empty($request->get('invoice_number')) && !empty($request->get('invoice_date')) && !empty($request->get('invoiced_amount'))) {
             // Update Project invoice data
             $inv = json_decode($proj['invoices'] ?? "[]", true);
@@ -253,6 +300,7 @@ class ThreadsController extends Controller
             $meta["remaining_amount"] = $proj['remaining_amount'];
             $meta["total_price"] = $proj['total_price'];
         }
+
         if (!empty($request->get('invoice_number')) && !empty($request->get('delete_invoice'))) {
             $invoiceNumber = $request->get('invoice_number');
             
@@ -285,205 +333,164 @@ class ThreadsController extends Controller
             $meta["remaining_amount"] = $proj['remaining_amount'];
             $meta["total_price"] = $proj['total_price'];
         }
+
         if (!empty($request->get('invoice_pic'))) {
             $proj['invoice_pic'] = $request->get('invoice_pic');
             $deposit['invoice_pic'] = $request->get('invoice_pic');
+            foreach ($relatedProjects as $relatedProj) {
+                $relatedProj['invoice_pic'] = $request->get('invoice_pic');
+                $relatedProj->save();
+            }
             $meta["invoice_pic"] = $request->get('invoice_pic');
         }
         if (!empty($request->get('invoice_status'))) {
             $proj['invoice_status'] = $request->get('invoice_status');
             $deposit['invoice_status'] = $request->get('invoice_status');
-            $meta["invoice_status"] = $request->get('invoice_status');
-        }
-
-        $deadlinemeta = json_decode($proj['deadline_meta'], true) ?? [];
-
-
-        $reminder = null;
-        $deadline = null;
-
-        if (!empty($request->get('production_deadline'))) {
-            if ($proj['status'] == "new") {
-                $proj['status'] = "production";
-            }
-            $proj['production_deadline'] = $request->get('production_deadline');
-            $reminder = date('Y-m-d', strtotime($request->get('production_deadline')));
-            $deadline = $request->get('production_deadline');
-            // $note .= "\r\nProduction Deadline : " . $request->get('production_deadline');
-
-            $meta["production_deadline"] = $request->get('production_deadline');
-            $meta["production_deadline_alert"] = date('Y-m-d', strtotime($request->get('production_deadline')));
-            $deadlinemeta['production_deadline'] = [
-                "date" => $request->get('production_deadline'),
-                "reminder" => $reminder
-            ];
-        }
-
-        if (!empty($request->get('delivery_deadline'))) {
-            $proj['delivery_deadline'] = $request->get('delivery_deadline');
-            $reminder = date('Y-m-d', strtotime($request->get('delivery_deadline')));
-            $deadline = $request->get('delivery_deadline');
-            // $note .= "\r\nDelivery Deadline : " . $request->get('delivery_deadline');
-            $meta["delivery_deadline"] = $request->get('delivery_deadline');
-            $meta["delivery_deadline_alert"] = date('Y-m-d', strtotime($request->get('delivery_deadline')));
-            $deadlinemeta['delivery_deadline'] = [
-                "date" => $request->get('delivery_deadline'),
-                "reminder" => $reminder
-            ];
-        }
-        if (!empty($request->get('po_deadline'))) {
-            $proj['po_deadline'] = $request->get('po_deadline');
-            $reminder = date('Y-m-d', strtotime($request->get('po_deadline')));
-            $deadline = $request->get('po_deadline');
-
-            // Update po deadline for all related projects regardless of is_po_deposit
             foreach ($relatedProjects as $relatedProj) {
-                $relatedProj['po_deadline'] = $request->get('po_deadline');
+                $relatedProj['invoice_status'] = $request->get('invoice_status');
                 $relatedProj->save();
             }
+            $meta["invoice_status"] = $request->get('invoice_status');
+        }
+    }
 
-            $meta["po_deadline"] = $request->get('po_deadline');
-            $meta["po_deadline_alert"] = date('Y-m-d', strtotime($request->get('po_deadline')));
-            $deadlinemeta['po_deadline'] = [
-                "date" => $request->get('po_deadline'),
-                "reminder" => $reminder
-            ];
-        }
+    public function store(Request $request)
+    {
+        $rules = [
+            'project' => 'required|exists:projects,id',
+            'note' => 'nullable|string',
+            'thread_type' => 'required|string',
 
+            'production_deadline' => 'nullable|date',
+            'delivery_deadline' => 'nullable|date',
+            'po_deadline' => 'nullable|date',
 
-        if (!empty($request->get('do_deadline'))) {
-            $proj['do_deadline'] = $request->get('do_deadline');
-            $reminder = date('Y-m-d', strtotime($request->get('do_deadline')));
-            $deadline = $request->get('do_deadline');
-            // $note .= "\r\nDelivery Deadline : " . $request->get('do_deadline');
-            $meta["do_deadline"] = $request->get('do_deadline');
-            // $meta["do_deadline_alert"] = date('Y-m-d', strtotime($request->get('do_deadline') . ' - ' . $request->get('alert_time') . ' days'));
-            $deadlinemeta['do_deadline'] = [
-                "date" => $request->get('do_deadline'),
-                "reminder" => $reminder
-            ];
-        }
+            'invoice_number' => 'nullable|string',
+            'invoice_date' => 'nullable|date',
+            'invoice_pic' => 'nullable|string',
+            'invoice_status' => 'nullable|string',
 
-        if (!empty($request->get('design_deadline'))) {
-            $proj['design_deadline'] = $request->get('design_deadline');
-            $reminder = date('Y-m-d', strtotime($request->get('design_deadline')));
-            $deadline = $request->get('design_deadline');
-            // $note .= "\r\nDelivery Deadline : " . $request->get('design_deadline');
-            $meta["design_deadline"] = $request->get('design_deadline');
-            // $meta["design_deadline_alert"] = date('Y-m-d', strtotime($request->get('design_deadline') . ' - ' . $request->get('alert_time') . ' days'));
-            $deadlinemeta['design_deadline'] = [
-                "date" => $request->get('design_deadline'),
-                "reminder" => $reminder
-            ];
-        }
+            'client_po_number' => 'nullable|string',
+            'client_po_date' => 'nullable|date',
 
-        if (!empty($request->get('bast_deadline'))) {
-            $proj['bast_deadline'] = $request->get('bast_deadline');
-            $reminder = date('Y-m-d', strtotime($request->get('bast_deadline')));
-            $deadline = $request->get('bast_deadline');
-            // $note .= "\r\nDelivery Deadline : " . $request->get('bast_deadline');
-            $meta["bast_deadline"] = $request->get('bast_deadline');
-            // $meta["bast_deadline_alert"] = date('Y-m-d', strtotime($request->get('bast_deadline') . ' - ' . $request->get('alert_time') . ' days'));
-            $deadlinemeta['bast_deadline'] = [
-                "date" => $request->get('bast_deadline'),
-                "reminder" => $reminder
-            ];
-        }
-
-        if (!empty($request->get('gr_deadline'))) {
-            $proj['gr_deadline'] = $request->get('gr_deadline');
-            $reminder = date('Y-m-d', strtotime($request->get('gr_deadline')));
-            $deadline = $request->get('gr_deadline');
-            // $note .= "\r\nDelivery Deadline : " . $request->get('gr_deadline');
-            $meta["gr_deadline"] = $request->get('gr_deadline');
-            // $meta["gr_deadline_alert"] = date('Y-m-d', strtotime($request->get('gr_deadline') . ' - ' . $request->get('alert_time') . ' days'));
-            $deadlinemeta['gr_deadline'] = [
-                "date" => $request->get('gr_deadline'),
-                "reminder" => $reminder
-            ];
-        }
-
-
-        if ($request->get('thread_type') == 'po') {
-            notify('Project PO Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'marketing', json_encode(["project" => $proj]), "threads");
-            $deadlinemeta['po_deadline']['notes'] = $note;
-            $deadlinemeta['po_deadline']['updated_at'] = date('Y-m-d H:i:s');
-        }
-        if ($request->get('thread_type') == 'invoice') {
-            notify('Project Invoice Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'finance', json_encode(["project" => $proj]), "threads");
-            $deadlinemeta['invoice_deadline']['notes'] = $note;
-            $deadlinemeta['invoice_deadline']['updated_at'] = date('Y-m-d H:i:s');
-        }
-        if ($request->get('thread_type') == 'do') {
-            notify('Project DO Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'delivery', json_encode(["project" => $proj]), "threads");
-            $deadlinemeta['do_deadline']['notes'] = $note;
-            $deadlinemeta['do_deadline']['updated_at'] = date('Y-m-d H:i:s');
-        }
-        if ($request->get('thread_type') == 'design') {
-            notify('Project Design Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'design', json_encode(["project" => $proj]), "threads");
-            $deadlinemeta['design_deadline']['notes'] = $note;
-            $deadlinemeta['design_deadline']['updated_at'] = date('Y-m-d H:i:s');
-        }
-        if ($request->get('thread_type') == 'bast') {
-            notify('Project BAST Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'design', json_encode(["project" => $proj]), "threads");
-            $deadlinemeta['bast_deadline']['notes'] = $note;
-            $deadlinemeta['bast_deadline']['updated_at'] = date('Y-m-d H:i:s');
-        }
-        if ($request->get('thread_type') == 'gr') {
-            notify('Project GR Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'design', json_encode(["project" => $proj]), "threads");
-            $deadlinemeta['gr_deadline']['notes'] = $note;
-            $deadlinemeta['gr_deadline']['updated_at'] = date('Y-m-d H:i:s');
-        }
-
-        if ($request->get('thread_type') == 'logistic') {
-            notify('Project Logistic Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'delivery', json_encode(["project" => $proj]), "threads");
-            if (!empty($request->get('delivery_deadline'))) {
-                $deadlinemeta['delivery_deadline']['notes'] = $note;
-                $deadlinemeta['delivery_deadline']['updated_at'] = date('Y-m-d H:i:s');
-            }
-            if (!empty($request->get('production_deadline'))) {
-                $deadlinemeta['production_deadline']['notes'] = $note;
-                $deadlinemeta['production_deadline']['updated_at'] = date('Y-m-d H:i:s');
-            }
-        }
-
-        $follupdata =[
-            'project_id' => $proj['id'],
-            'type' => $request->get('thread_type'),
-            'notes' => $note,
-            "reminder" => $reminder,
-            "deadline" => $deadline,
-            'meta_data' => json_encode($meta),
-            "user_id" => auth()->user()->id,
         ];
+        $validator = Validator::make($request->all(), $rules);
+        if ($validator->fails()) {
+            return response()->json([
+                'code' => 422,
+                'errors' => $validator->errors()
+            ]);
+        }
+        try {
+            $note = $request->get('note') . "\r\n";
+            $meta = [];
 
-        if(!empty($request->get('cancel_files'))){
-            $proj['status'] = 'cancel';
-            $follupdata['files'] = json_encode($request->get('cancel_files'));
-            $follupdata['notes'] = 'Project cancelled';
-            $follupdata['meta_data'] = json_encode(["Project Cancelled"]);
-            $deposit['status'] = 'cancel';
-            // Update related projects status if not a deposit
+            $proj = Project::findOrFail($request->get('project'));
+            $deposit = PoDeposit::findOrFail($proj['po_deposit']);
+
+            // Get related projects if po_deposit is not marked as deposit
+            $relatedProjects = [];
             if (!$deposit['is_po_deposit']) {
-                foreach ($relatedProjects as $relatedProj) {
-                    $relatedProj['status'] = 'cancel';
-                    $relatedProj->save();
+                $relatedProjects = Project::where('po_deposit', $proj['po_deposit'])
+                    ->where('id', '!=', $proj['id'])
+                    ->get();
+            }
+
+            $deadlinemeta = json_decode($proj['deadline_meta'], true) ?? [];
+            $reminder = null;
+            $deadline = null;
+
+            // Invoice-related actions (affect all related projects)
+            if (
+                (!empty($request->get('invoice_number')) && !empty($request->get('invoice_date')) && !empty($request->get('invoiced_amount')))
+                || (!empty($request->get('invoice_number')) && !empty($request->get('delete_invoice')))
+                || !empty($request->get('invoice_pic'))
+                || !empty($request->get('invoice_status'))
+            ) {
+                $this->updateProjectAndAllRelated($proj, $deposit, $relatedProjects, $request, $meta, $deadlinemeta);
+            } else {
+                // All other actions (affect only main project and deposit)
+                $this->updateProjectAndDepositOnly($proj, $deposit, $request, $meta, $deadlinemeta);
+            }
+
+            if ($request->get('thread_type') == 'po') {
+                notify('Project PO Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'marketing', json_encode(["project" => $proj]), "threads");
+                $deadlinemeta['po_deadline']['notes'] = $note;
+                $deadlinemeta['po_deadline']['updated_at'] = date('Y-m-d H:i:s');
+            }
+            if ($request->get('thread_type') == 'invoice') {
+                notify('Project Invoice Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'finance', json_encode(["project" => $proj]), "threads");
+                $deadlinemeta['invoice_deadline']['notes'] = $note;
+                $deadlinemeta['invoice_deadline']['updated_at'] = date('Y-m-d H:i:s');
+            }
+            if ($request->get('thread_type') == 'do') {
+                notify('Project DO Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'delivery', json_encode(["project" => $proj]), "threads");
+                $deadlinemeta['do_deadline']['notes'] = $note;
+                $deadlinemeta['do_deadline']['updated_at'] = date('Y-m-d H:i:s');
+            }
+            if ($request->get('thread_type') == 'design') {
+                notify('Project Design Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'design', json_encode(["project" => $proj]), "threads");
+                $deadlinemeta['design_deadline']['notes'] = $note;
+                $deadlinemeta['design_deadline']['updated_at'] = date('Y-m-d H:i:s');
+            }
+            if ($request->get('thread_type') == 'bast') {
+                notify('Project BAST Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'design', json_encode(["project" => $proj]), "threads");
+                $deadlinemeta['bast_deadline']['notes'] = $note;
+                $deadlinemeta['bast_deadline']['updated_at'] = date('Y-m-d H:i:s');
+            }
+            if ($request->get('thread_type') == 'gr') {
+                notify('Project GR Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'design', json_encode(["project" => $proj]), "threads");
+                $deadlinemeta['gr_deadline']['notes'] = $note;
+                $deadlinemeta['gr_deadline']['updated_at'] = date('Y-m-d H:i:s');
+            }
+
+            if ($request->get('thread_type') == 'logistic') {
+                notify('Project Logistic Updated', 'Project #' . $proj['job_number'] . ' thread updated', 'delivery', json_encode(["project" => $proj]), "threads");
+                if (!empty($request->get('delivery_deadline'))) {
+                    $deadlinemeta['delivery_deadline']['notes'] = $note;
+                    $deadlinemeta['delivery_deadline']['updated_at'] = date('Y-m-d H:i:s');
+                }
+                if (!empty($request->get('production_deadline'))) {
+                    $deadlinemeta['production_deadline']['notes'] = $note;
+                    $deadlinemeta['production_deadline']['updated_at'] = date('Y-m-d H:i:s');
                 }
             }
+
+            $follupdata =[
+                'project_id' => $proj['id'],
+                'type' => $request->get('thread_type'),
+                'notes' => $note,
+                "reminder" => $reminder,
+                "deadline" => $deadline,
+                'meta_data' => json_encode($meta),
+                "user_id" => auth()->user()->id,
+            ];
+
+            if(!empty($request->get('cancel_files'))){
+                $proj['status'] = 'cancel';
+                $follupdata['files'] = json_encode($request->get('cancel_files'));
+                $follupdata['notes'] = 'Project cancelled';
+                $follupdata['meta_data'] = json_encode(["Project Cancelled"]);
+                $deposit['status'] = 'cancel';
+                // Update related projects status if not a deposit
+                if (!$deposit['is_po_deposit']) {
+                    foreach ($relatedProjects as $relatedProj) {
+                        $relatedProj['status'] = 'cancel';
+                        $relatedProj->save();
+                    }
+                }
+            }
+
+            $proj['deadline_meta'] = json_encode($deadlinemeta);
+
+            $proj->save();
+            $deposit->save();
+
+            $followup = Thread::create($follupdata);
+
+            return response()->json(['code' => 200, 'data' => $followup]);
+        } catch (\Throwable $th) {
+            return response()->json(['code' => 400, 'data' => $th]);
         }
-
-
-        $proj['deadline_meta'] = json_encode($deadlinemeta);
-
-        $proj->save();
-        $deposit->save();
-
-        $followup = Thread::create($follupdata);
-
-
-        return response()->json(['code' => 200, 'data' => $followup]);
-        // } catch (\Throwable $th) {
-        //     return response()->json(['code' => 400, 'data' => $th]);
-        // }
     }
 }

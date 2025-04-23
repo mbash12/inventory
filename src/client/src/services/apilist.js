@@ -340,6 +340,11 @@ export const apilist = {
         url:"/upload",
         auth:true,
         method:'POST'
+    },
+    finance:{
+        url:"/projects/finance",
+        auth:true,
+        method:'GET'
     }
 
 }

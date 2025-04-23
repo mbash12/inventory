@@ -11,6 +11,7 @@ import {
     currentUser,
     deletePodeposit,
     cancelPodeposit,
+    getProjectLists,
 } from "../services/service";
 import { loading } from "../services/router";
 import Confirm from "../components/Confirm.vue";
@@ -197,7 +198,7 @@ const search = () => {
     });
     localStorage.setItem(state.project_type, JSON.stringify(filter));
 
-    getProjectList(filter).then((r) => {
+    getProjectLists(filter).then((r) => {
         loading(false);
         if (r.code === 200) {
             state.data = r.data.map((e) => {
@@ -407,7 +408,7 @@ onMounted(() => {
                                         class="font-semibold text-blue-grayy-700 text-sm"
                                         >Status</strong
                                     >
-                                    <label
+                                    <!-- <label
                                         class="flex items-center justify-start gap-2 my-2 text-sm w-full"
                                     >
                                         <input
@@ -422,7 +423,7 @@ onMounted(() => {
                                             "
                                         />
                                         <span>New</span>
-                                    </label>
+                                    </label> -->
 
                                     <label
                                         class="flex items-center justify-start gap-2 my-2 text-sm w-full"
@@ -475,7 +476,7 @@ onMounted(() => {
                                         <span>Delivered</span>
                                     </label>
 
-                                    <label
+                                    <!-- <label
                                         class="flex items-center justify-start gap-2 my-2 text-sm w-full"
                                     >
                                         <input
@@ -492,7 +493,7 @@ onMounted(() => {
                                             "
                                         />
                                         <span>On Production</span>
-                                    </label>
+                                    </label> -->
                                     <label
                                         class="flex items-center justify-start gap-2 my-2 text-sm w-full"
                                     >

@@ -64,6 +64,7 @@ import MktTaskList from "../desktop/MktTaskList.vue";
 import { reactive } from "vue";
 import { checkLoggedin, isLoggedin } from "./service";
 import MktNewSummary from "../desktop/MktNewSummary.vue";
+import MktFinances from "../desktop/MktFinances.vue";
 export const store = reactive({
     isLoading: false,
 });
@@ -88,18 +89,10 @@ const publicRoutes = [
 
 const mainRoutes = {
     path: "/",
-    redirect: { path: "/projects" },
+    redirect: { path: "/deliveries" },
     component: Page,
     children: [
-        {
-            path: "projects",
-            component: Projects,
-            name: "Projects",
-            meta: {
-                requiresAuth: true,
-                roles: ["admin", "marketing", "finance", "delivery", "design"],
-            },
-        },
+        
         {
             path: "deliveries",
             component: Deliveries,
@@ -109,7 +102,15 @@ const mainRoutes = {
                 roles: ["admin", "delivery", "design"],
             },
         },
-        
+        {
+            path: "projects",
+            component: Projects,
+            name: "Projects",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "marketing", "finance", "delivery", "design"],
+            },
+        },
         {
             path: "delivery-report",
             component: DeliveryReport,
@@ -405,6 +406,33 @@ const desktopRoutes = {
             },
         },
         {
+            path: "nondeposits",
+            component: MktFinances,
+            name: "Non Deposit",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "finance"],
+            },
+        },
+        {
+            path: "deposits",
+            component: MktFinances,
+            name: "Deposit",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "finance"],
+            },
+        },
+        {
+            path: "projects",
+            component: MktProject,
+            name: "Projects",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "marketing", "finance", "delivery", "design"],
+            },
+        },
+        {
             path: "gimmick",
             component: MktProject,
             name: "Gimmick",
@@ -685,7 +713,7 @@ const routes = [
     ...publicRoutes,
     mainRoutes,
     desktopRoutes,
-    ...errorRoutes
+    ...errorRoutes,
 ];
 
 const router = VueRouter.createRouter({

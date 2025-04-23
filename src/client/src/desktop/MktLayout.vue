@@ -177,7 +177,7 @@ const menus = [
         title: "Projects",
         activeon: "desktopprojects",
         link: "",
-        roles: ["marketing", "admin", "finance", "delivery","design"],
+        roles: ["marketing", "admin","delivery","design","finance"],
         submenu: [
             // {
             //     title: "All Projects",
@@ -199,6 +199,25 @@ const menus = [
                 link: "/desktop/supplier-payment",
                 activeon: "desktop/supplier-payment"
             }
+        ]
+    },
+    {
+        icon: "ri-article-fill",
+        title: "Finance Data",
+        activeon: "financedata",
+        link: "",
+        roles: ["finance"],
+        submenu: [
+            {
+                title: "Non Deposits",
+                link: "/desktop/nondeposits",
+                activeon: "desktop/nondeposit"
+            },
+            {
+                title: "Deposits",
+                link: "/desktop/deposits",
+                activeon: "desktop/deposits"
+            },
         ]
     },
     {

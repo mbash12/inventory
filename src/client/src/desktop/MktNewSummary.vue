@@ -490,7 +490,6 @@ onMounted(() => {
                     </label>
                     <span></span>
                 </div> -->
-
                 <div class="flex gap-8 w-full mt-4">
                     <div
                         class="flex flex-col flex-1"
@@ -506,6 +505,7 @@ onMounted(() => {
                         <span class="mt-4"></span>
                         <Upload
                             :files="state.bast_files ?? []"
+                            :disabled="currentUser.user.user.position=='finance'"
                             @update="state.bast_files = $event"
                         />
                     </div>
@@ -520,6 +520,7 @@ onMounted(() => {
                         <span class="mt-4"></span>
                         <Upload
                             :files="state.gr_files ?? []"
+                            :disabled="currentUser.user.user.position=='finance'"
                             @update="state.gr_files = $event"
                         />
                     </div>

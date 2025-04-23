@@ -1,7 +1,7 @@
 <script setup>
 import Swal from "sweetalert2";
 import { ref, computed } from 'vue';
-import { upload } from "../services/service";
+import { upload,ASSETSURL } from "../services/service";
 
 const props = defineProps({
     files: {
@@ -10,6 +10,11 @@ const props = defineProps({
         default: () => []
     },
     required: {
+        type: Boolean,
+        required: false,
+        default: false
+    },
+    disabled: {
         type: Boolean,
         required: false,
         default: false
@@ -123,6 +128,7 @@ const inputValue = computed(() => {
 
 <template>
     <div class="flex flex-col gap-4">
+        <div class="flex flex-col gap-4" v-if="!disabled">
         
         <div
             class="border border-dashed border-gray-200 p-6 flex flex-col gap-2 items-center justify-center rounded-xl relative"
@@ -154,6 +160,7 @@ const inputValue = computed(() => {
         <div v-if="validationError" class="text-red-500 text-sm">
             {{ validationError }}
         </div>
+        </div>  
 
         <div class="flex flex-col gap-2 overflow-y-auto max-h-300px" v-if="hasFiles">
             <div
@@ -192,15 +199,15 @@ const inputValue = computed(() => {
                         {{ file.split(".").pop().toUpperCase() }}
                     </text>
                 </svg>
-                <div class="flex flex-col">
+                <a :href="ASSETSURL+file" target="_blank" class="flex flex-col">
                     <span class="text-sm">
                         {{ file.length > 20 ? "..." + file.slice(-20) : file }}
                     </span>
                     <span class="text-xs text-gray-400">{{
                         getFileType(file)
                     }}</span>
-                </div>
-                <span class="absolute top-1 right-2" @click="deleteFile(index)">
+                </a>
+                <span class="absolute top-1 right-2" v-if="!disabled" @click="deleteFile(index)">
                     <i class="ri-delete-bin-line text-xl cursor-pointer"></i>
                 </span>
             </div>
