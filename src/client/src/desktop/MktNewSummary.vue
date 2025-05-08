@@ -493,7 +493,7 @@ onMounted(() => {
                 <div class="flex gap-8 w-full mt-4">
                     <div
                         class="flex flex-col flex-1"
-                        v-if="state.project_type == 'design'"
+                        v-if="state.project_type == 'design' || state.documents.bast"
                     >
                         <strong class="capitalize text-lg font-bold"
                             >Upload BAST Document</strong

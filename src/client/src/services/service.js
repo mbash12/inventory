@@ -2,7 +2,7 @@ import { apilist } from "./apilist";
 import { reactive, ref } from "vue";
 export const URLL = "";
 // export const URLL = "http://localhost:8000";
-// export const URLL = "https://invdev.pelangiservice.com";
+// export const URLL = "https://inventory.pelangiservice.com";
 export const APIURL = URLL + "/api";
 export const ASSETSURL = URLL + "/storage/";
 export const isLoggedin = ref(false);

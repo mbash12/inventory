@@ -563,6 +563,27 @@ onMounted(() => {
                                         />
                                         <span>Deposit</span>
                                     </label>
+                                    <label
+                                        class="flex items-center justify-start gap-2 my-2 text-sm w-full"
+                                    >
+                                        <input
+                                            type="checkbox"
+                                            value="nondeposit"
+                                            @input="
+                                                (e) =>
+                                                    handleSetSingle(
+                                                        e,
+                                                        'deposit'
+                                                    )
+                                            "
+                                            :checked="
+                                                state.deposit.includes(
+                                                    'nondeposit'
+                                                )
+                                            "
+                                        />
+                                        <span>Non Deposit</span>
+                                    </label>
                                     <div class="h-2"></div>
                                     <strong
                                         class="font-semibold text-blue-grayy-700 text-sm"
@@ -986,11 +1007,25 @@ onMounted(() => {
                                 </div>
                             </th>
                             <th class="p-1">
-                                <div
-                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full"
+                                <button
+                                    @click="() => setSort('client_po_date')"
+                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 hover:bg-gray-200 w-full group"
                                 >
-                                    <span class="font-bold leading-4">PO</span>
-                                </div>
+                                    <span class="font-bold leading-4"
+                                        >PO Number</span
+                                    >
+                                    <i
+                                        :class="
+                                            state.order_by ===
+                                            'client_po_date'
+                                                ? state.sort === 'asc'
+                                                    ? 'opacity-100'
+                                                    : 'opacity-100 rotate-180'
+                                                : 'opacity-30'
+                                        "
+                                        class="ri-arrow-down-line text-lg font-thin transform"
+                                    ></i>
+                                </button>
                             </th>
                             <th class="p-1">
                                 <div

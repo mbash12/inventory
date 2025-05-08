@@ -644,8 +644,17 @@ class ProjectController extends Controller
                         ->where('client_po_number', null)
                         ->orWhere(function($q) {
                             $q->where('project_type', 'gimmick')
-                              ->whereNull('do_files')
-                              ->orWhere('do_files','null');
+                              ->where(function($q2) {
+                                  $q2->whereNull('do_files')
+                                     ->orWhere('do_files','null')
+                                     ->orWhere(function($q3) {
+                                         $q3->whereRaw("JSON_EXTRACT(documents, '$.bast') = 'true'")
+                                           ->where(function($q4) {
+                                               $q4->whereNull('bast_files')
+                                                 ->orWhere('bast_files', 'null');
+                                           });
+                                     });
+                              });
                         })
                         ->orWhere(function($q) {
                             $q->where('project_type', 'printing')
@@ -659,7 +668,16 @@ class ProjectController extends Controller
                         })
                         ->orWhere(function($q) {
                             $q->where('project_type', 'payment')
-                              ->whereNull('gr_files');
+                              ->where(function($q2) {
+                                  $q2->whereNull('gr_files')
+                                     ->orWhere(function($q3) {
+                                         $q3->whereRaw("JSON_EXTRACT(documents, '$.bast') = 'true'")
+                                           ->where(function($q4) {
+                                               $q4->whereNull('bast_files')
+                                                 ->orWhere('bast_files', 'null');
+                                           });
+                                     });
+                              });
                         })
                         ->orWhere(function($q) {
                             $q->whereRaw("JSON_EXTRACT(documents, '$.gr') IS NULL OR JSON_EXTRACT(documents, '$.gr') = 'false'")
@@ -748,13 +766,15 @@ class ProjectController extends Controller
                     }) ? 'uploaded' : 'not uploaded';
                 }
 
+
+                $documents = json_decode($project->documents, true);
+
                 $bastStatus = 'not applicable';
-                if ($project->project_type === 'design') {
+                if ($project->project_type === 'design' || ($documents && isset($documents['bast']) && $documents['bast'])) {
                     $bastStatus = $project->bast_files ? 'uploaded' : 'not uploaded';
                 }
 
                 $grStatus = 'not applicable';
-                $documents = json_decode($project->documents, true);
                 if ($documents && isset($documents['gr']) && $documents['gr']) {
                     $grStatus = $project->gr_files ? 'uploaded' : 'not uploaded';
                 }

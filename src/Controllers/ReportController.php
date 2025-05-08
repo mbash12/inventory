@@ -253,6 +253,7 @@ class ReportController extends Controller
             ->selectRaw('SUM(CASE WHEN invoice_status = "sent" THEN total_price ELSE 0 END) as issued')
             ->selectRaw('SUM(total_price) as total')
             ->whereYear('client_po_date', $year)
+            ->whereNotNull('client_po_number')
             ->groupBy('client_company')
             ->havingRaw('SUM(total_price) > 0')
             ->orderByRaw('SUM(total_price) DESC')

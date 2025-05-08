@@ -415,7 +415,7 @@ onMounted(async () => {
                     <tbody>
                         <tr v-for="(item, i) in paginatedData">
                             <td>
-                                {{ i+1 }}
+                                {{ i+1+(10*(state.page-1)) }}
                             </td>
                             <td>
                                 {{ item.client_company }}

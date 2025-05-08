@@ -11,7 +11,7 @@ import {
     goto,
     createPodeposit,
     updatePodeposit,
-    getPodeposit
+    getPodeposit,
 } from "../services/service";
 import { useRoute, useRouter } from "vue-router";
 import { loading } from "../services/router";
@@ -56,7 +56,7 @@ const state = reactive({
         bast: false,
         gr: false,
     },
-    back: null
+    back: null,
 });
 
 const deleteSelectedProduct = () => {
@@ -126,7 +126,7 @@ const submit = () => {
         },
     ];
     // console.log(products)
-    // return 
+    // return
     let data = {
         title: state.title,
         total_price: state.total_price,
@@ -137,7 +137,9 @@ const submit = () => {
         client_company: state.client_company,
         client_pic_name: state.client_pic_name,
         status: state.status,
-        products_group: products.filter((e) => e.products.filter((p) => p.name !== '').length > 0),
+        products_group: products.filter(
+            (e) => e.products.filter((p) => p.name !== "").length > 0
+        ),
         is_po_deposit: false,
     };
     if (state.id === null) {
@@ -230,9 +232,9 @@ onMounted(() => {
                 const projects = data.projects_data.map((e) => {
                     return {
                         ...e,
-                        products: e.products_data
+                        products: e.products_data,
                     };
-                })
+                });
                 state.documents = JSON.parse(projects[0].documents);
                 // console.log(state.documents)
                 generateProds();
@@ -260,7 +262,7 @@ onMounted(() => {
                 if (payment) {
                     state.prd.payment = payment;
                 }
-                console.log(state.prd)
+                console.log(state.prd);
             }
         });
     } else {
@@ -276,7 +278,7 @@ onMounted(() => {
         >
             <div
                 class="cursor-pointer mr-4"
-                @click="goto(state.back+'?filter=true')"
+                @click="goto(state.back + '?filter=true')"
             >
                 <i class="ri-arrow-left-line"></i>
             </div>
@@ -429,6 +431,27 @@ onMounted(() => {
                             >
                         </div>
                     </label>
+
+
+                    <label class="flex flex-col gap-1 mb-1">
+                        <div class="flex justify-between">
+                            <span class="text-sm text-left">GR/TBP</span>
+                        </div>
+                        <div
+                            class="w-full border rounded-lg bg-white h-45px relative flex items-center px-4 gap-4"
+                        >
+                            <input
+                                type="checkbox"
+                                :value="true"
+                                v-model="state.documents.gr"
+                            />
+                            <span>
+                                Require to upload GR file
+                            </span>
+                        </div>
+                    </label>
+
+                    
                 </div>
                 <div class="w-1/2">
                     <label class="flex flex-col gap-1 mb-1">
@@ -600,6 +623,24 @@ onMounted(() => {
                             >
                         </div>
                     </label>
+
+                    <label class="flex flex-col gap-1 mb-1">
+                        <div class="flex justify-between">
+                            <span class="text-sm text-left">BAST</span>
+                        </div>
+                        <div
+                            class="w-full border rounded-lg bg-white h-45px relative flex items-center px-4 gap-4"
+                        >
+                            <input
+                                type="checkbox"
+                                :value="true"
+                                v-model="state.documents.bast"
+                            />
+                            <span>
+                                Require to upload BAST file
+                            </span>
+                        </div>
+                    </label>
                 </div>
             </div>
             <div>
@@ -639,7 +680,9 @@ onMounted(() => {
                             "
                         >
                             {{
-                                state.prd[Object.keys(state.prd)[index]]?.products.filter(
+                                state.prd[
+                                    Object.keys(state.prd)[index]
+                                ]?.products.filter(
                                     (e) => e.name !== null && e.name !== ""
                                 ).length
                             }}
@@ -666,7 +709,8 @@ onMounted(() => {
                         <tbody>
                             <tr
                                 class="border-b"
-                                v-for="(product, i) in state.prd.gimmick?.products"
+                                v-for="(product, i) in state.prd.gimmick
+                                    ?.products"
                                 :key="i"
                             >
                                 <td class="">
@@ -773,11 +817,13 @@ onMounted(() => {
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
                                         @click="
                                             () =>
-                                                state.prd.gimmick.products.push({
-                                                    name: '',
-                                                    quantity: '',
-                                                    description: '',
-                                                })
+                                                state.prd.gimmick.products.push(
+                                                    {
+                                                        name: '',
+                                                        quantity: '',
+                                                        description: '',
+                                                    }
+                                                )
                                         "
                                     >
                                         <i class="ri-add-box-line text-xl"></i>
@@ -808,7 +854,8 @@ onMounted(() => {
                         <tbody>
                             <tr
                                 class="border-b"
-                                v-for="(product, i) in state.prd.design?.products"
+                                v-for="(product, i) in state.prd.design
+                                    ?.products"
                                 :key="i"
                             >
                                 <td class="">
@@ -949,7 +996,8 @@ onMounted(() => {
                         <tbody>
                             <tr
                                 class="border-b"
-                                v-for="(product, i) in state.prd.printing?.products"
+                                v-for="(product, i) in state.prd.printing
+                                    ?.products"
                                 :key="i"
                             >
                                 <td class="">
@@ -1056,11 +1104,13 @@ onMounted(() => {
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
                                         @click="
                                             () =>
-                                                state.prd.printing.products.push({
-                                                    name: '',
-                                                    quantity: '',
-                                                    description: '',
-                                                })
+                                                state.prd.printing.products.push(
+                                                    {
+                                                        name: '',
+                                                        quantity: '',
+                                                        description: '',
+                                                    }
+                                                )
                                         "
                                     >
                                         <i class="ri-add-box-line text-xl"></i>
@@ -1090,7 +1140,8 @@ onMounted(() => {
                         <tbody>
                             <tr
                                 class="border-b"
-                                v-for="(product, i) in state.prd.payment?.products"
+                                v-for="(product, i) in state.prd.payment
+                                    ?.products"
                                 :key="i"
                             >
                                 <td class="">
@@ -1198,11 +1249,13 @@ onMounted(() => {
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
                                         @click="
                                             () =>
-                                                state.prd.payment.products.push({
-                                                    name: '',
-                                                    quantity: '',
-                                                    description: '',
-                                                })
+                                                state.prd.payment.products.push(
+                                                    {
+                                                        name: '',
+                                                        quantity: '',
+                                                        description: '',
+                                                    }
+                                                )
                                         "
                                     >
                                         <i class="ri-add-box-line text-xl"></i>
@@ -1214,7 +1267,7 @@ onMounted(() => {
                     </table>
                 </div>
 
-                <div class="text-sm text-[#667085] mt-12 mb-2">
+                <!-- <div class="text-sm text-[#667085] mt-12 mb-2">
                     Choose Documents to be Uploaded
                 </div>
                 <div class="border p-3 flex justify-between rounded-lg mb-30">
@@ -1245,13 +1298,13 @@ onMounted(() => {
                         <span class="text-sm">GR/TBP</span>
                     </label>
                     <span></span>
-                </div>
+                </div> -->
 
                 <div class="flex justify-end gap-4 mt-8">
                     <button
                         class="h-45px px-4 border bg-white rounded-lg gap-2 shadow text-gray-700 hover:shadow-sm hover:bg-gray-50 flex items-center"
                         type="button"
-                        @click="router.push(state.back+'?filter=true')"
+                        @click="router.push(state.back + '?filter=true')"
                     >
                         <i class="ri-close-circle-line text-xl"></i>
                         <strong>Cancel</strong>
@@ -1309,7 +1362,7 @@ onMounted(() => {
         @hide="
             () => {
                 alertShowSuccess = false;
-                router.push(state.back+'?filter=true');
+                router.push(state.back + '?filter=true');
             }
         "
     ></Alert>
