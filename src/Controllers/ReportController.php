@@ -19,8 +19,6 @@ use Src\Models\InvoiceProgress;
 use Illuminate\Support\Facades\DB;
 use PhpOffice\PhpSpreadsheet\IOFactory;
 
-
-
 class ReportController extends Controller
 {
     // public function __construct()
@@ -34,8 +32,8 @@ class ReportController extends Controller
             $year = $request->input('year', date('Y'));
             
             // Base queries for different report sections
-            $poDepositQuery = PoDeposit::query();
-            $projectQuery = Project::query();
+            $poDepositQuery = PoDeposit::query()->where('status', '!=', 'cancel');
+            $projectQuery = Project::query()->where('status', '!=', 'cancel');
             
             // Apply year filter
             $poDepositQuery->whereYear('client_po_date', $year);
@@ -128,6 +126,7 @@ class ReportController extends Controller
                 ->leftJoinSub($poDepositQuery->clone()
                     ->where('is_po_deposit', false)
                     ->whereIn('invoice_status', ['progress', 'new'])
+                    ->whereNotNull('client_po_number')
                     ->selectRaw('MONTH(client_po_date) as month, SUM(total_price) as total')
                     ->groupBy('month'),
                     'po_data',
@@ -253,6 +252,7 @@ class ReportController extends Controller
             ->selectRaw('SUM(CASE WHEN invoice_status = "sent" THEN total_price ELSE 0 END) as issued')
             ->selectRaw('SUM(total_price) as total')
             ->whereYear('client_po_date', $year)
+            ->where('status', '!=', 'cancel')
             ->whereNotNull('client_po_number')
             ->groupBy('client_company')
             ->havingRaw('SUM(total_price) > 0')

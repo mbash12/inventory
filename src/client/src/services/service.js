@@ -1,8 +1,8 @@
 import { apilist } from "./apilist";
 import { reactive, ref } from "vue";
 // export const URLL = "";
-// export const URLL = "http://localhost:8000";
-export const URLL = "https://inventory.dotcomsolution.co.id";
+export const URLL = "http://localhost:8000";
+// export const URLL = "https://inventory.dotcomsolution.co.id";
 export const APIURL = URLL + "/api";
 export const ASSETSURL = URLL + "/storage/";
 export const isLoggedin = ref(false);

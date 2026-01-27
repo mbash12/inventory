@@ -95,7 +95,6 @@ class PoDepositController extends Controller
     // }
     private function createProject($request, $podeposit, $real = false, $is_po_deposit)
     {
-        
         $list = $request->po_deposits;
         if ($real) $list = $request->products_group;
         
@@ -116,8 +115,8 @@ class PoDepositController extends Controller
             $project->client_po_number = $projectData['client_po_number'];
             $project->client_pic_name = $real ? $podeposit->client_pic_name : $projectData['client_pic_name'];
             $project->status = $projectData['status'] ?? 'new';
-            $project->invoice_status = $projectData['invoice_status'] ?? 'new';
-
+            $project->invoice_status = 'new';
+            $project->invoices = $podeposit->invoices;
 
             $project->pic_name = $podeposit->pic_name;
             $project->client_company = $podeposit->client_company;
@@ -133,9 +132,6 @@ class PoDepositController extends Controller
             }
 
             $project->deposit_id = $deposit_id ?? null;
-
-
-
 
             $project->project_type = $projectData['project_type'] ?? 'gimmick';
             $project->bast_files = $projectData['bast_files'] ?? null;
@@ -198,6 +194,7 @@ class PoDepositController extends Controller
 
             $project->deposit_id = $deposit_id ?? null;
             $project->invoice_status = $projectData['invoice_status'] ?? 'new';
+            $project->invoices = $podeposit->invoices;
 
 
 
@@ -339,7 +336,7 @@ class PoDepositController extends Controller
                 "balance" => $request->balance ?? null,
                 "title" => $request->title ?? null,
                 "total_price" => $request->total_price ?? null,
-                "invoice_status" => $request->invoice_status ?? "new"
+                "invoice_status" => "new"
             ]);
             
             $this->createProject($request, $podeposit, true, $request->is_po_deposit);

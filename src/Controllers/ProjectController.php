@@ -460,55 +460,67 @@ class ProjectController extends Controller
         }
     }
 
-    public function show($id)
-    {
-        try {
-            $query = Project::with('products_data', 'po_deposit_data')
-                ->withSum(['inventories_data as stored' => fn (Builder $query) => $query->where('storage', TRUE)], 'quantity')
-                ->withSum(['inventories_data as delivered' => fn (Builder $query) => $query->where('warehouse', 2)], 'quantity')
-                ->withSum('products_data as total', 'quantity');
+   public function show($id)
+{
+    try {
+        $query = Project::with('products_data', 'po_deposit_data')
+            ->withSum(['inventories_data as stored' => fn (Builder $query) => $query->where('storage', TRUE)], 'quantity')
+            ->withSum(['inventories_data as delivered' => fn (Builder $query) => $query->where('warehouse', 2)], 'quantity')
+            ->withSum('products_data as total', 'quantity');
 
-            $result = $query->findOrFail($id)->toArray();
+        $result = $query->findOrFail($id)->toArray();
 
-
-            $result['products_data'] = array_map(function ($item) {
-                $item['delivered'] =  (int) DeliveryItem::where('product', $item['id'])->whereNot('delivered_at', NULL)->where('destination', 2)->sum('actual_quantity');
-                $item['deliveries'] = DeliveryItem::where('product', $item['id'])
-                    ->with(['delivery_data' => function($query) {
-                        $query->select('id', 'do_number', 'do_file', 'do_files');
-                    }])
-                    ->whereHas('delivery_data', function($query) {
-                        $query->whereNotNull('do_number');
-                    })
-                    ->get()
-                    ->map(function($deliveryItem) {
-                        $do_files = [];
-                        if ($deliveryItem->delivery_data->do_file) {
-                            $do_files[] = $deliveryItem->delivery_data->do_file;
-                        }
-                        if ($deliveryItem->delivery_data->do_files) {
-                            $additional_files = json_decode($deliveryItem->delivery_data->do_files, true) ?? [];
+        $result['products_data'] = array_map(function ($item) {
+            $item['delivered'] = (int) DeliveryItem::where('product', $item['id'])
+                ->whereNot('delivered_at', NULL)
+                ->where('destination', 2)
+                ->sum('actual_quantity');
+                
+            $item['deliveries'] = DeliveryItem::where('product', $item['id'])
+                ->with(['delivery_data' => function($query) {
+                    $query->select('id', 'do_number', 'do_file', 'do_files');
+                }])
+                ->whereHas('delivery_data', function($query) {
+                    $query->whereNotNull('do_number');
+                })
+                ->get()
+                ->map(function($deliveryItem) {
+                    $do_files = [];
+                    
+                    if ($deliveryItem->delivery_data->do_file) {
+                        $do_files[] = $deliveryItem->delivery_data->do_file;
+                    }
+                    
+                    if ($deliveryItem->delivery_data->do_files) {
+                        $additional_files = json_decode($deliveryItem->delivery_data->do_files, true);
+                        
+                        // Ensure $additional_files is an array
+                        if (is_array($additional_files)) {
                             $do_files = array_merge($do_files, $additional_files);
+                        } else {
+                            // If it's not an array, treat it as a single file path
+                            $do_files[] = $deliveryItem->delivery_data->do_files;
                         }
-                        return [
-                            'do_number' => $deliveryItem->delivery_data->do_number,
-                            'quantity' => $deliveryItem->actual_quantity,
-                            'do_files' => array_values(array_unique($do_files))
-                        ];
-                    });
-                return $item;
-            }, $result['products_data']);
+                    }
+                    
+                    return [
+                        'do_number' => $deliveryItem->delivery_data->do_number,
+                        'quantity' => $deliveryItem->actual_quantity,
+                        'do_files' => array_values(array_unique($do_files))
+                    ];
+                });
+                
+            return $item;
+        }, $result['products_data']);
 
-
-
-            return response()->json([
-                'code' => 200,
-                'data' => $result,
-            ]);
-        } catch (\Throwable $th) {
-            return response()->json(['code' => 404, 'data' => []]);
-        }
+        return response()->json([
+            'code' => 200,
+            'data' => $result,
+        ]);
+    } catch (\Throwable $th) {
+        return response()->json(['code' => 404, 'data' => []]);
     }
+}
 
     public function update($id, Request $request)
     {
@@ -639,51 +651,53 @@ class ProjectController extends Controller
         // try {
             $query = Project::with('products_data', 'shipping_vendors_data', 'po_deposit_data', 'deliveries_data')
                 ->withSum('products_data as total', 'quantity')
-                ->where(function($query) {
-                    $query
-                        ->where('client_po_number', null)
-                        ->orWhere(function($q) {
-                            $q->where('project_type', 'gimmick')
-                              ->where(function($q2) {
-                                  $q2->whereNull('do_files')
-                                     ->orWhere('do_files','null')
-                                     ->orWhere(function($q3) {
-                                         $q3->whereRaw("JSON_EXTRACT(documents, '$.bast') = 'true'")
-                                           ->where(function($q4) {
-                                               $q4->whereNull('bast_files')
-                                                 ->orWhere('bast_files', 'null');
-                                           });
-                                     });
-                              });
-                        })
-                        ->orWhere(function($q) {
-                            $q->where('project_type', 'printing')
-                              ->whereNull('do_files')
-                              ->orWhere('do_files','null');
-                        })
-                        ->orWhere(function($q) {
-                            $q->where('project_type', 'design')
-                              ->whereNull('bast_files')
-                              ->orWhere('bast_files','null');
-                        })
-                        ->orWhere(function($q) {
-                            $q->where('project_type', 'payment')
-                              ->where(function($q2) {
-                                  $q2->whereNull('gr_files')
-                                     ->orWhere(function($q3) {
-                                         $q3->whereRaw("JSON_EXTRACT(documents, '$.bast') = 'true'")
-                                           ->where(function($q4) {
-                                               $q4->whereNull('bast_files')
-                                                 ->orWhere('bast_files', 'null');
-                                           });
-                                     });
-                              });
-                        })
-                        ->orWhere(function($q) {
-                            $q->whereRaw("JSON_EXTRACT(documents, '$.gr') IS NULL OR JSON_EXTRACT(documents, '$.gr') = 'false'")
-                              ->whereNull('gr_files');
-                        });
-                })->whereNot('status', 'cancel')->where('is_real', true)->whereNot('invoice_status', 'sent');
+                // ->where(function($query) {
+                //     $query
+                //         ->where('client_po_number', null)
+                //         ->orWhere(function($q) {
+                //             $q->where('project_type', 'gimmick')
+                //               ->where(function($q2) {
+                //                   $q2->whereNull('do_files')
+                //                      ->orWhere('do_files','null')
+                //                      ->orWhere(function($q3) {
+                //                          $q3->whereRaw("JSON_EXTRACT(documents, '$.bast') = 'true'")
+                //                           ->where(function($q4) {
+                //                               $q4->whereNull('bast_files')
+                //                                  ->orWhere('bast_files', 'null');
+                //                           });
+                //                      });
+                //               });
+                //         })
+                //         ->orWhere(function($q) {
+                //             $q->where('project_type', 'printing')
+                //               ->whereNull('do_files')
+                //               ->orWhere('do_files','null');
+                //         })
+                //         ->orWhere(function($q) {
+                //             $q->where('project_type', 'design')
+                //               ->whereNull('bast_files')
+                //               ->orWhere('bast_files','null');
+                //         })
+                //         ->orWhere(function($q) {
+                //             $q->where('project_type', 'payment')
+                //               ->where(function($q2) {
+                //                   $q2->whereNull('gr_files')
+                //                      ->orWhere(function($q3) {
+                //                          $q3->whereRaw("JSON_EXTRACT(documents, '$.bast') = 'true'")
+                //                           ->where(function($q4) {
+                //                               $q4->whereNull('bast_files')
+                //                                  ->orWhere('bast_files', 'null');
+                //                           });
+                //                      });
+                //               });
+                //         })
+                //         ->orWhere(function($q) {
+                //             $q->whereRaw("JSON_EXTRACT(documents, '$.gr') IS NULL OR JSON_EXTRACT(documents, '$.gr') = 'false'")
+                //               ->whereNull('gr_files');
+                //         });
+                // })
+                ->whereNot('status', 'cancel')->where('is_real', true);
+                // ->whereNot('invoice_status', 'sent');
 
                 if ($request->has('filter_date')) {
                     $dateField = $request->input('filter_date');

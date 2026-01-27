@@ -269,6 +269,19 @@ class ThreadsController extends Controller
             $proj['remaining_amount'] = $proj['total_price'] - $proj['invoiced_amount'];
             $proj['invoices'] = json_encode($inv);
 
+            // Set invoice status to progress if not set
+            if (empty($request->get('invoice_status'))) {
+                $proj['invoice_status'] = 'progress';
+                $deposit['invoice_status'] = 'progress';
+                if (!$deposit['is_po_deposit']) {
+                    foreach ($relatedProjects as $relatedProj) {
+                        $relatedProj['invoice_status'] = 'progress';
+                        $relatedProj->save();
+                    }
+                }
+                $meta["invoice_status"] = 'progress';
+            }
+
             // Update PoDeposit invoice data
             $deposit_inv = json_decode($deposit['invoices'] ?? "[]", true);
             array_push($deposit_inv, [
@@ -327,6 +340,20 @@ class ThreadsController extends Controller
             });
             $deposit['invoices'] = json_encode($deposit_inv);
 
+            // Update related projects if not a deposit
+            if (!$deposit['is_po_deposit']) {
+                foreach ($relatedProjects as $relatedProj) {
+                    $relatedInv = json_decode($relatedProj['invoices'] ?? "[]", true);
+                    $relatedInv = array_filter($relatedInv, function ($invoice) use ($invoiceNumber) {
+                        return $invoice['invoice_number'] !== $invoiceNumber;
+                    });
+                    $relatedProj['invoiced_amount'] = $relatedProj['invoiced_amount'] - $inv_amount;
+                    $relatedProj['remaining_amount'] = $relatedProj['total_price'] - $relatedProj['invoiced_amount'];
+                    $relatedProj['invoices'] = json_encode($relatedInv);
+                    $relatedProj->save();
+                }
+            }
+
             $meta["delete_invoice"] = TRUE;
             $meta["invoice_number"] = $request->get('invoice_number');
             $meta["invoiced_amount"] = $inv_amount;
@@ -337,18 +364,22 @@ class ThreadsController extends Controller
         if (!empty($request->get('invoice_pic'))) {
             $proj['invoice_pic'] = $request->get('invoice_pic');
             $deposit['invoice_pic'] = $request->get('invoice_pic');
-            foreach ($relatedProjects as $relatedProj) {
-                $relatedProj['invoice_pic'] = $request->get('invoice_pic');
-                $relatedProj->save();
+            if (!$deposit['is_po_deposit']) {
+                foreach ($relatedProjects as $relatedProj) {
+                    $relatedProj['invoice_pic'] = $request->get('invoice_pic');
+                    $relatedProj->save();
+                }
             }
             $meta["invoice_pic"] = $request->get('invoice_pic');
         }
         if (!empty($request->get('invoice_status'))) {
             $proj['invoice_status'] = $request->get('invoice_status');
             $deposit['invoice_status'] = $request->get('invoice_status');
-            foreach ($relatedProjects as $relatedProj) {
-                $relatedProj['invoice_status'] = $request->get('invoice_status');
-                $relatedProj->save();
+            if (!$deposit['is_po_deposit']) {
+                foreach ($relatedProjects as $relatedProj) {
+                    $relatedProj['invoice_status'] = $request->get('invoice_status');
+                    $relatedProj->save();
+                }
             }
             $meta["invoice_status"] = $request->get('invoice_status');
         }

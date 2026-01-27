@@ -21,7 +21,11 @@ use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 use Illuminate\Support\Facades\DB;
+
 use Illuminate\Support\Str;
+
+
+use App\Support\SafeMimeTypeGuesser;
 
 
 Route::post('init', [InitController::class, 'index']);
@@ -63,10 +67,10 @@ Route::apiResource('clients', ClientController::class);
 Route::apiResource('users', UserController::class);
 Route::apiResource('warehouses', WarehouseController::class);
 Route::apiResource('shipping-vendors', ShippingVendorController::class);
-Route::get('projects/snippet/{id}', [ProjectController::class, 'snippet']);
 Route::get('projects/todo', [ProjectController::class, 'todo']);
-Route::put('projects/delivery/{id}', [ProjectController::class, 'delivery']);
 Route::get('projects/finance', [ProjectController::class, 'indexes']);
+Route::get('projects/snippet/{id}', [ProjectController::class, 'snippet']);
+Route::put('projects/delivery/{id}', [ProjectController::class, 'delivery']);
 Route::apiResource('projects', ProjectController::class);
 Route::get('po-deposits/migrate', [PoDepositController::class, 'migrate']);
 Route::apiResource('po-deposits', PoDepositController::class);
@@ -96,23 +100,31 @@ Route::prefix('marketing-followup')->group(function () {
     Route::put('/{id}', [FollowupController::class, 'update']);
 });
 
+
 Route::post('/upload', function (Request $request) {
+    
+    // return response()->json(['path' => "hello"], 201);
+    
     $request->validate([
-        'file' => 'required|file|max:4096|mimes:jpeg,png,jpg,gif,pdf,doc,docx,xls,xlsx,ppt,pptx', // 4MB Max, limited file types
+        'file' => 'required|file|max:4096',
     ]);
-    if ($request->file('file')->isValid()) {
-        $file = $request->file('file');
-        $originalName = $file->getClientOriginalName();
-        $randomString = Str::random(10); // Generate 10 character random string
-        $newFileName = $randomString . '_' . $originalName;
-        
-        $path = $request->file('file')->storeAs('uploads', $newFileName, 'public');
-        return response()->json(['path' => $path], 201);
+
+    $file = $request->file('file');
+    if (!$file->isValid()) {
+        return response()->json(['error' => 'Invalid file'], 400);
     }
 
-    return response()->json(['error' => 'File upload failed'], 400);
-});
+    $filename = Str::random(40) . '.' . $file->getClientOriginalExtension();
+    $destinationPath = storage_path('app/public/uploads');
 
+    if (!file_exists($destinationPath)) {
+        mkdir($destinationPath, 0755, true);
+    }
+
+    $file->move($destinationPath, $filename); // <- NO finfo triggered
+
+    return response()->json(['path' => "uploads/$filename"], 201);
+});
 
 Route::get('/file/{filename}', function ($filename) {
     $path = 'uploads/' . $filename;
