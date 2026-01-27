@@ -408,7 +408,7 @@ onMounted(() => {
                                         class="font-semibold text-blue-grayy-700 text-sm"
                                         >Status</strong
                                     >
-                                    <!-- <label
+                                    <label
                                         class="flex items-center justify-start gap-2 my-2 text-sm w-full"
                                     >
                                         <input
@@ -423,7 +423,7 @@ onMounted(() => {
                                             "
                                         />
                                         <span>New</span>
-                                    </label> -->
+                                    </label>
 
                                     <label
                                         class="flex items-center justify-start gap-2 my-2 text-sm w-full"
@@ -476,7 +476,7 @@ onMounted(() => {
                                         <span>Delivered</span>
                                     </label>
 
-                                    <!-- <label
+                                    <label
                                         class="flex items-center justify-start gap-2 my-2 text-sm w-full"
                                     >
                                         <input
@@ -493,7 +493,7 @@ onMounted(() => {
                                             "
                                         />
                                         <span>On Production</span>
-                                    </label> -->
+                                    </label>
                                     <label
                                         class="flex items-center justify-start gap-2 my-2 text-sm w-full"
                                     >
@@ -987,11 +987,25 @@ onMounted(() => {
                                 </div>
                             </th>
                             <th class="p-1">
-                                <div
-                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 w-full"
+                                <button
+                                    @click="() => setSort('client_po_number')"
+                                    class="rounded flex items-center justify-start py-1 min-h-10 px-1 gap-2 hover:bg-gray-200 w-full group"
                                 >
-                                    <span class="font-bold leading-4">PO</span>
-                                </div>
+                                    <span class="font-bold leading-4"
+                                        >PO</span
+                                    >
+                                    <i
+                                        :class="
+                                            state.order_by ===
+                                            'client_po_number'
+                                                ? state.sort === 'asc'
+                                                    ? 'opacity-100'
+                                                    : 'opacity-100 rotate-180'
+                                                : 'opacity-30'
+                                        "
+                                        class="ri-arrow-down-line text-lg font-thin transform"
+                                    ></i>
+                                </button>
                             </th>
                             <th class="p-1">
                                 <div

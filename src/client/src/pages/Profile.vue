@@ -13,6 +13,7 @@ import {
     getNotificationCount,
 } from "../services/service";
 import Alert from "../components/Alert.vue";
+import { compressImage } from "../utils/imageCompression";
 const alertShowError = ref(false);
 const alertShowSuccess = ref(false);
 const editMode = ref(false);
@@ -40,18 +41,27 @@ const editProfile = async () => {
     }
     editMode.value = !editMode.value;
 };
-const uploadPicture = (e) => {
+const uploadPicture = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
     loading();
-    var file = e.target.files[0];
-    upload(file)
-        .then((e) => {
-            currentUser.user.user.photos = e.media_url;
-            loading(false);
-        })
-        .catch((e) => {
-            alertShowError.value = e;
-            loading(false);
-        });
+    
+    try {
+        let processedFile = file;
+        
+        // Compress image if it's an image file
+        if (file.type.startsWith('image/')) {
+            processedFile = await compressImage(file, 2000, 0.8);
+        }
+        
+        const result = await upload(processedFile);
+        currentUser.user.user.photos = result.media_url;
+        loading(false);
+    } catch (error) {
+        alertShowError.value = error;
+        loading(false);
+    }
 };
 
 const router = useRouter();

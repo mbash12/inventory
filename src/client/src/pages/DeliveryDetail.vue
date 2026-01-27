@@ -16,6 +16,7 @@ import {
 } from "../services/service";
 import { useRoute, useRouter } from "vue-router";
 import BulkDelivery from "../components/BulkDelivery.vue";
+import { compressImage } from "../utils/imageCompression";
 const alertShowError = ref(false);
 const alertShowSuccess = ref(false);
 const route = useRoute();
@@ -73,25 +74,34 @@ const removeFile = (type, i) => {
     if(type === 'receipt_files') state.receipt_files.splice(i, 1)
 }
 
-const uploadFile = (type, e) => {
-    
+const uploadFile = async (type, e) => {
     const file = e.target.files[0];
-    if (file.size > 4 * 1024 * 1024) {
-        alertShowError.value = "File size must be less than 4MB";
-        return;
-    }
+    if (!file) return;
 
     const types = ["image/jpeg", "image/jpg", "image/png", "application/pdf"];
     if (!types.includes(file.type)) {
         alertShowError.value = "Only image and document files are allowed";
         return;
     }
+
     loading();
-    upload(file).then((r) => {
-        if(type === 'do_files') state.do_files = [...state.do_files, r.path]
-        if(type === 'receipt_files') state.receipt_files = [...state.receipt_files, r.path]
+    
+    try {
+        let processedFile = file;
+        
+        // Compress image if it's an image file
+        if (file.type.startsWith('image/')) {
+            processedFile = await compressImage(file, 2000, 0.8);
+        }
+        
+        const result = await upload(processedFile);
+        if(type === 'do_files') state.do_files = [...state.do_files, result.path]
+        if(type === 'receipt_files') state.receipt_files = [...state.receipt_files, result.path]
         loading(false);
-    });
+    } catch (error) {
+        alertShowError.value = "Upload failed. Please try again.";
+        loading(false);
+    }
 }
 onMounted(() => {
     loading();

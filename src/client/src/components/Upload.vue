@@ -2,6 +2,7 @@
 import Swal from "sweetalert2";
 import { ref, computed } from 'vue';
 import { upload,ASSETSURL } from "../services/service";
+import { compressImage } from "../utils/imageCompression";
 
 const props = defineProps({
     files: {
@@ -70,8 +71,15 @@ const uploadFile = async (event) => {
             return;
         }
 
+        let processedFile = file;
+        
+        // Compress image if it's an image file
+        if (file.type.startsWith('image/')) {
+            processedFile = await compressImage(file, 2000, 0.8);
+        }
+
         // Create a new array with the new file
-        const result = await upload(file);
+        const result = await upload(processedFile);
         if (!result.path) {
             throw new Error(result.message);
         }
