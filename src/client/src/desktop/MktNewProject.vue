@@ -19,6 +19,7 @@ import Confirm from "../components/Confirm.vue";
 import Alert from "../components/Alert.vue";
 import Select1 from "../components/Select1.vue";
 import INumber from "../components/INumber.vue";
+import { computed, watch, nextTick } from "vue";
 const confirmDelete = ref(false);
 const confirmSave = ref(false);
 const alertShowSuccess = ref(false);
@@ -56,12 +57,92 @@ const state = reactive({
         bast: false,
         gr: false,
     },
+    manual_total_price: false, // Flag to indicate if user wants to manually enter total price
     back: null,
 });
+
+// Computed property to calculate total price based on all products
+const calculatedTotalPrice = computed(() => {
+    let total = 0;
+
+    // Calculate total for gimmick, design, and printing products (quantity * price)
+    const nonPaymentProducts = [
+        ...(state.prd.gimmick?.products || []),
+        ...(state.prd.design?.products || []),
+        ...(state.prd.printing?.products || [])
+    ];
+
+    nonPaymentProducts.forEach(product => {
+        if (product.name !== "" && product.quantity && product.price) {
+            total += parseInt(product.quantity) * parseInt(product.price);
+        }
+    });
+
+    // Calculate total for payment products (price as amount directly)
+    const paymentProducts = state.prd.payment?.products || [];
+    paymentProducts.forEach(product => {
+        if (product.name !== "" && product.price) {
+            total += parseInt(product.price);
+        }
+    });
+
+    return total;
+});
+
+// Watcher to update total_price when in auto mode
+watch(calculatedTotalPrice, (newVal) => {
+    if (!state.manual_total_price) {
+        // Only update if the current value is different from calculated value
+        if (state.total_price !== newVal) {
+            state.total_price = newVal;
+        }
+    }
+}, { immediate: true });
 
 const deleteSelectedProduct = () => {
     confirmDelete.value = false;
     state.prd[state.selected_type].products.splice(state.selected, 1);
+};
+
+// Track if the focus event should trigger manual mode
+const shouldSwitchToManual = ref(true);
+
+const toggleManualTotalPrice = () => {
+    state.manual_total_price = !state.manual_total_price;
+    // Prevent the focus event from switching to manual when toggle is clicked
+    shouldSwitchToManual.value = false;
+    if (!state.manual_total_price) {
+        // Switch back to auto-calculated value
+        state.total_price = calculatedTotalPrice.value;
+    } else {
+        // When switching to manual, preserve the current value or set to calculated if null
+        if (state.total_price === null || state.total_price === undefined || state.total_price === "") {
+            state.total_price = calculatedTotalPrice.value;
+        }
+    }
+};
+
+const onTotalPriceFocus = async (event) => {
+    // Wait for any pending DOM updates
+    await nextTick();
+
+    if (!state.manual_total_price && shouldSwitchToManual.value) {
+        // When user focuses on the field while in auto mode, switch to manual mode
+        state.manual_total_price = true;
+        // Set the value to the calculated value when switching to manual
+        if (state.total_price === null || state.total_price === undefined || state.total_price === "") {
+            state.total_price = calculatedTotalPrice.value;
+        }
+    }
+    // Reset the flag after processing
+    shouldSwitchToManual.value = true;
+};
+
+const onTotalPriceBlur = () => {
+    // On blur, validate the input and ensure it's a number
+    if (state.total_price !== null && state.total_price !== undefined && state.total_price !== "") {
+        state.total_price = parseFloat(state.total_price) || 0;
+    }
 };
 const setDelete = (type, i) => {
     state.selected = i;
@@ -70,6 +151,25 @@ const setDelete = (type, i) => {
 };
 const submit = () => {
     loading();
+
+    // Calculate total price based on all product subtotals
+    const calculateTotalPrice = (products, isPaymentSection = false) => {
+        return products.reduce((sum, product) => {
+            if (product.name !== "") {
+                if (isPaymentSection) {
+                    // For payment section, use price directly as the amount
+                    return sum + (product.price ? parseInt(product.price) : 0);
+                } else {
+                    // For other sections, multiply quantity by price
+                    if (product.quantity && product.price) {
+                        return sum + (parseInt(product.quantity) * parseInt(product.price));
+                    }
+                }
+            }
+            return sum;
+        }, 0);
+    };
+
     let i = 1;
     const products = [
         {
@@ -81,7 +181,7 @@ const submit = () => {
             client_po_number: state.client_po_number,
             client_company: state.client_company,
             client_pic_name: state.client_pic_name,
-            total_price: state.total_price,
+            total_price: calculateTotalPrice(state.prd.gimmick?.products || []),
             project_type: "gimmick",
             documents: state.documents,
         },
@@ -94,7 +194,7 @@ const submit = () => {
             client_po_number: state.client_po_number,
             client_company: state.client_company,
             client_pic_name: state.client_pic_name,
-            total_price: state.total_price,
+            total_price: calculateTotalPrice(state.prd.design?.products || []),
             project_type: "design",
             documents: state.documents,
         },
@@ -107,7 +207,7 @@ const submit = () => {
             client_po_number: state.client_po_number,
             client_company: state.client_company,
             client_pic_name: state.client_pic_name,
-            total_price: state.total_price,
+            total_price: calculateTotalPrice(state.prd.printing?.products || []),
             project_type: "printing",
             documents: state.documents,
         },
@@ -120,16 +220,34 @@ const submit = () => {
             client_po_number: state.client_po_number,
             client_company: state.client_company,
             client_pic_name: state.client_pic_name,
-            total_price: state.total_price,
+            total_price: calculateTotalPrice(state.prd.payment?.products || [], true),
             project_type: "payment",
             documents: state.documents,
         },
     ];
+
+    // Calculate overall total price
+    const overallTotalPrice = products.reduce((sum, productGroup) => {
+        return sum + (productGroup.total_price || 0);
+    }, 0);
+
+    // Determine the final total price based on whether user chose manual or auto calculation
+    let finalTotalPrice;
+    if (state.manual_total_price) {
+        // Use the manually entered value
+        finalTotalPrice = state.total_price !== null && state.total_price !== undefined && state.total_price !== ""
+            ? parseFloat(state.total_price)
+            : 0;
+    } else {
+        // Use the calculated value
+        finalTotalPrice = calculatedTotalPrice.value;
+    }
+
     // console.log(products)
     // return
     let data = {
         title: state.title,
-        total_price: state.total_price,
+        total_price: finalTotalPrice, // Use manual input or calculated value
         job_number: state.job_number,
         client_po_date: state.client_po_date,
         pic_name: state.pic_name,
@@ -188,16 +306,16 @@ const submit = () => {
 };
 const generateProds = () => {
     state.prd.gimmick = {
-        products: [{ name: "", quantity: "", description: "" }],
+        products: [{ name: "", quantity: "", price: "", description: "" }],
     };
     state.prd.design = {
-        products: [{ name: "", quantity: "", description: "" }],
+        products: [{ name: "", quantity: "", price: "", description: "" }],
     };
     state.prd.printing = {
-        products: [{ name: "", quantity: "", description: "" }],
+        products: [{ name: "", quantity: "", price: "", description: "" }],
     };
     state.prd.payment = {
-        products: [{ name: "", quantity: "", description: "" }],
+        products: [{ name: "", price: "", description: "" }],
     };
 };
 onMounted(() => {
@@ -230,9 +348,30 @@ onMounted(() => {
                     state.closed_at = null;
                 }
                 const projects = data.projects_data.map((e) => {
+                    // Initialize products with price and total_price properties if they don't exist
+                    const productsWithPrice = e.products_data.map(product => {
+                        // For payment products, use price field as the amount (with fallback to quantity for existing data)
+                        if (e.project_type === 'payment') {
+                            // Check if we have price field (new format) or need to use quantity (old format)
+                            const amountValue = product.price ? parseInt(product.price) :
+                                              product.quantity ? parseInt(product.quantity) : 0;
+                            return {
+                                ...product,
+                                price: product.price || product.quantity || "", // Use price if available, otherwise quantity for old data
+                                total_price: product.total_price || amountValue
+                            };
+                        } else {
+                            return {
+                                ...product,
+                                price: product.price || "",
+                                total_price: product.total_price || (product.quantity && product.price ? parseInt(product.quantity) * parseInt(product.price) : 0)
+                            };
+                        }
+                    });
+
                     return {
                         ...e,
-                        products: e.products_data,
+                        products: productsWithPrice,
                     };
                 });
                 state.documents = JSON.parse(projects[0].documents);
@@ -410,6 +549,9 @@ onMounted(() => {
                     <label class="flex flex-col gap-1 mb-1">
                         <div class="flex justify-between">
                             <span class="text-sm text-left">Omzet</span>
+                            <span class="text-blue-500 text-sm cursor-pointer" @click.stop="toggleManualTotalPrice">
+                                {{ state.manual_total_price ? 'Auto' : 'Manual' }}
+                            </span>
                         </div>
                         <div
                             class="w-full border rounded-lg bg-white h-45px relative flex items-center"
@@ -418,6 +560,8 @@ onMounted(() => {
                                 required
                                 class="bg-transparent w-full h-full rounded-lg pl-45px text-14px"
                                 v-model="state.total_price"
+                                :readonly="!state.manual_total_price"
+                                @blur="onTotalPriceBlur"
                             />
                             <div class="absolute left-4 text-red-500 text-xl">
                                 <i class="ri-money-dollar-box-line"></i>
@@ -700,6 +844,12 @@ onMounted(() => {
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Quantity
                                 </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    Price
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    Subtotal
+                                </th>
                                 <th class="text-left text-sm px-4 py-2">
                                     Description
                                 </th>
@@ -774,6 +924,46 @@ onMounted(() => {
                                     <div
                                         class="flex items-center flex-col gap-1"
                                     >
+                                        <INumber
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent"
+                                            placeholder="0"
+                                            v-model="product.price"
+                                            required
+                                        />
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `products.${i}.price`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `products.${i}.price`
+                                                ][0].replace(
+                                                    `products.${i}.price `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center justify-center h-full"
+                                    >
+                                        <div
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent flex items-center"
+                                            placeholder="0"
+                                        >
+                                            {{ product.quantity && product.price ? nom(product.quantity * product.price) : '0' }}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
                                         <textarea
                                             class="w-full h-full px-4 text-sm h-40px pt-10px bg-transparent"
                                             placeholder="e.g. : Warna/Finishing"
@@ -811,7 +1001,7 @@ onMounted(() => {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="4">
+                                <td colspan="6">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -821,6 +1011,7 @@ onMounted(() => {
                                                     {
                                                         name: '',
                                                         quantity: '',
+                                                        price: '',
                                                         description: '',
                                                     }
                                                 )
@@ -844,6 +1035,12 @@ onMounted(() => {
 
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Quantity
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    Price
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    Subtotal
                                 </th>
                                 <th class="text-left text-sm px-4 py-2">
                                     Item Specification
@@ -919,6 +1116,46 @@ onMounted(() => {
                                     <div
                                         class="flex items-center flex-col gap-1"
                                     >
+                                        <INumber
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent"
+                                            placeholder="0"
+                                            v-model="product.price"
+                                            required
+                                        />
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `products.${i}.price`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `products.${i}.price`
+                                                ][0].replace(
+                                                    `products.${i}.price `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center justify-center h-full"
+                                    >
+                                        <div
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent flex items-center"
+                                            placeholder="0"
+                                        >
+                                            {{ product.quantity && product.price ? nom(product.quantity * product.price) : '0' }}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
                                         <textarea
                                             class="w-full h-full px-4 text-sm h-40px pt-10px bg-transparent"
                                             placeholder="e.g. : Ukuran/sisi"
@@ -956,7 +1193,7 @@ onMounted(() => {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="4">
+                                <td colspan="6">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -965,6 +1202,7 @@ onMounted(() => {
                                                 state.prd.design.products.push({
                                                     name: '',
                                                     quantity: '',
+                                                    price: '',
                                                     description: '',
                                                 })
                                         "
@@ -986,6 +1224,12 @@ onMounted(() => {
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Quantity
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    Price
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    Subtotal
                                 </th>
                                 <th class="text-left text-sm px-4 py-2">
                                     Specification
@@ -1061,6 +1305,46 @@ onMounted(() => {
                                     <div
                                         class="flex items-center flex-col gap-1"
                                     >
+                                        <INumber
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent"
+                                            placeholder="0"
+                                            v-model="product.price"
+                                            required
+                                        />
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `products.${i}.price`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `products.${i}.price`
+                                                ][0].replace(
+                                                    `products.${i}.price `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center justify-center h-full"
+                                    >
+                                        <div
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent flex items-center"
+                                            placeholder="0"
+                                        >
+                                            {{ product.quantity && product.price ? nom(product.quantity * product.price) : '0' }}
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
                                         <textarea
                                             class="w-full h-full px-4 text-sm h-40px pt-10px bg-transparent"
                                             placeholder="e.g. : Ukuran/Sisi/Finishing"
@@ -1098,7 +1382,7 @@ onMounted(() => {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="4">
+                                <td colspan="6">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -1108,6 +1392,7 @@ onMounted(() => {
                                                     {
                                                         name: '',
                                                         quantity: '',
+                                                        price: '',
                                                         description: '',
                                                     }
                                                 )
@@ -1129,10 +1414,10 @@ onMounted(() => {
                                     Supplier Name
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-1/4">
-                                    Nomor rekening
+                                    Account Number
                                 </th>
-                                <th class="text-left text-sm px-4 py-2">
-                                    Nominal
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    Amount
                                 </th>
                                 <th class="w-60px"></th>
                             </tr>
@@ -1209,21 +1494,21 @@ onMounted(() => {
                                         <INumber
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent"
                                             placeholder="e.g. : 255.000 "
-                                            v-model="product.quantity"
+                                            v-model="product.price"
                                             required
                                         />
                                         <span
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.quantity`
+                                                    `products.${i}.price`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.quantity`
+                                                    `products.${i}.price`
                                                 ][0].replace(
-                                                    `products.${i}.quantity `,
+                                                    `products.${i}.price `,
                                                     ""
                                                 )
                                             }}</span
@@ -1252,7 +1537,7 @@ onMounted(() => {
                                                 state.prd.payment.products.push(
                                                     {
                                                         name: '',
-                                                        quantity: '',
+                                                        price: '',
                                                         description: '',
                                                     }
                                                 )

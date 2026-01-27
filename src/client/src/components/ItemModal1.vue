@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, watch} from "vue";
+import { reactive, watch, computed} from "vue";
 
 const emit = defineEmits(["action", "delete"]);
 const props = defineProps({
@@ -10,7 +10,16 @@ const props = defineProps({
 const state = reactive({
   name: null,
   quantity: null,
+  price: null,
   description: null,
+});
+
+// Calculate subtotal based on quantity and price
+const subtotal = computed(() => {
+  if (state.quantity && state.price) {
+    return parseInt(state.quantity) * parseInt(state.price);
+  }
+  return 0;
 });
 
 watch(props, () => {
@@ -19,10 +28,12 @@ watch(props, () => {
       let data = { ...props.items[props.selected] };
       state.name = data.name;
       state.quantity = data.quantity;
+      state.price = data.price || null;
       state.description = data.description;
     } else {
       state.name = null;
       state.quantity = null;
+      state.price = null;
       state.description = null;
     }
   }
@@ -31,6 +42,8 @@ const emitAction = () => {
   emit("action", {
     name: state.name,
     quantity: state.quantity,
+    price: state.price,
+    total_price: subtotal.value,
     description: state.description,
   });
 };
@@ -57,16 +70,31 @@ const emitDelete = () => {
             required
           />
         </label>
-        <div class="flex w-full">
-          <label class="flex flex-col items-start relative w-full">
+        <div class="grid grid-cols-2 gap-4">
+          <label class="flex flex-col items-start">
             <span class="text-sm text-blue-gray-400">Quantity *</span>
             <input
               type="number"
-              class="border-b w-full h-10 bg-transparent text-sm text-black pr-20"
+              class="border-b w-full h-10 bg-transparent text-sm text-black"
               v-model="state.quantity"
               required
             />
           </label>
+          <label class="flex flex-col items-start">
+            <span class="text-sm text-blue-gray-400">Price *</span>
+            <input
+              type="number"
+              class="border-b w-full h-10 bg-transparent text-sm text-black"
+              v-model="state.price"
+              required
+            />
+          </label>
+        </div>
+        <div class="flex flex-col">
+          <span class="text-sm text-blue-gray-400">Subtotal</span>
+          <div class="border-b w-full h-10 bg-transparent text-sm text-black flex items-center">
+            {{ subtotal }}
+          </div>
         </div>
         <div class="flex w-full">
           <label class="flex flex-col items-start relative w-full">
@@ -75,7 +103,7 @@ const emitDelete = () => {
               class="border-b w-full h-20 bg-transparent text-sm text-black pr-20 pt-2"
               v-model="state.description"
             >
-            </textarea> 
+            </textarea>
           </label>
         </div>
         <div class="flex mt-2 gap-2">

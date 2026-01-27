@@ -1,6 +1,6 @@
 <script setup>
 import dayjs from "dayjs";
-import { onMounted, reactive, ref } from "vue";
+import { onMounted, reactive, ref, computed, watch, nextTick } from "vue";
 import {
     getProject,
     createProject,
@@ -36,6 +36,7 @@ const state = reactive({
     client_po_date: null,
     pic_name: null,
     total_price: null,
+    manual_total_price: false, // Flag to indicate if user wants to manually enter total price
     client_po_number: null,
     client_company: null,
     client_pic_name: null,
@@ -44,9 +45,70 @@ const state = reactive({
     products: [],
 });
 
+// Computed property to calculate total price based on all products
+const calculatedTotalPrice = computed(() => {
+    return state.products.reduce((sum, product) => {
+        if (product.quantity && product.price) {
+            return sum + (parseInt(product.quantity) * parseInt(product.price));
+        }
+        return sum;
+    }, 0);
+});
+
+// Watcher to update total_price when in auto mode
+watch(calculatedTotalPrice, (newVal) => {
+    if (!state.manual_total_price) {
+        // Only update if the current value is different from calculated value
+        if (state.total_price !== newVal) {
+            state.total_price = newVal;
+        }
+    }
+}, { immediate: true });
+
 const closeModal = () => {
     state.edit_open = false;
     state.selected = null;
+};
+
+// Track if the focus event should trigger manual mode
+const shouldSwitchToManual = ref(true);
+
+const onTotalPriceFocus = async (event) => {
+    // Wait for any pending DOM updates
+    await nextTick();
+
+    if (!state.manual_total_price && shouldSwitchToManual.value) {
+        // When user focuses on the field while in auto mode, switch to manual mode
+        state.manual_total_price = true;
+        // Set the value to the calculated value when switching to manual
+        if (state.total_price === null || state.total_price === undefined || state.total_price === "") {
+            state.total_price = calculatedTotalPrice.value;
+        }
+    }
+    // Reset the flag after processing
+    shouldSwitchToManual.value = true;
+};
+
+const toggleManualTotalPrice = () => {
+    state.manual_total_price = !state.manual_total_price;
+    // Prevent the focus event from switching to manual when toggle is clicked
+    shouldSwitchToManual.value = false;
+    if (!state.manual_total_price) {
+        // Switch back to auto-calculated value
+        state.total_price = calculatedTotalPrice.value;
+    } else {
+        // When switching to manual, preserve the current value or set to calculated if null
+        if (state.total_price === null || state.total_price === undefined || state.total_price === "") {
+            state.total_price = calculatedTotalPrice.value;
+        }
+    }
+};
+
+const onTotalPriceBlur = () => {
+    // On blur, validate the input and ensure it's a number
+    if (state.total_price !== null && state.total_price !== undefined && state.total_price !== "") {
+        state.total_price = parseFloat(state.total_price) || 0;
+    }
 };
 const handleSelected = (i = null) => {
     state.edit_open = true;
@@ -75,9 +137,22 @@ const handleAction = (data) => {
 };
 const submit = () => {
     loading();
+
+    // Determine the final total price based on whether user chose manual or auto calculation
+    let finalTotalPrice;
+    if (state.manual_total_price) {
+        // Use the manually entered value
+        finalTotalPrice = state.total_price !== null && state.total_price !== undefined && state.total_price !== ""
+            ? parseFloat(state.total_price)
+            : 0;
+    } else {
+        // Use the calculated value
+        finalTotalPrice = calculatedTotalPrice.value;
+    }
+
     let data = {
         title: state.title,
-        total_price: state.total_price,
+        total_price: finalTotalPrice, // Use manual input or calculated value
         job_number: state.job_number,
         client_po_date: state.client_po_date,
         pic_name: state.pic_name,
@@ -131,7 +206,14 @@ onMounted(() => {
                 state.total_price = data.total_price;
                 state.manufacture = data.manufacture;
                 state.is_po_deposit = data.is_po_deposit;
-                state.products = [...data.products_data];
+
+                // Initialize products with price and total_price properties
+                state.products = data.products_data.map(product => ({
+                    ...product,
+                    price: product.price || 0,
+                    total_price: product.total_price || (product.quantity * (product.price || 0))
+                }));
+
                 if (data.client_po_number == null) {
                     state.on_process = true;
                 }
@@ -216,18 +298,22 @@ onMounted(() => {
                                 </label>
                             </div>
                             <div class="flex flex-col items-start flex-1">
-                                <label
-                                    class="flex flex-col items-start gap-1 px-4 w-full"
-                                >
-                                    <span class="text-xs text-blue-gray-400"
-                                        >Omzet</span
-                                    >
+                                <div class="flex flex-col items-start gap-1 px-4 w-full">
+                                    <span class="text-xs text-blue-gray-400 flex justify-between w-full">
+                                        <span>Omzet</span>
+                                        <span class="text-blue-500 text-xs cursor-pointer" @click.stop="toggleManualTotalPrice">
+                                            {{ state.manual_total_price ? 'Auto' : 'Manual' }}
+                                        </span>
+                                    </span>
                                     <input
                                         type="number"
                                         class="border-b w-full h-10 bg-transparent text-sm text-black"
                                         v-model="state.total_price"
+                                        :readonly="!state.manual_total_price"
+                                        @focus="onTotalPriceFocus"
+                                        @blur="onTotalPriceBlur"
                                     />
-                                </label>
+                                </div>
                             </div>
                         </div>
                         <div class="p-4">
@@ -350,7 +436,18 @@ onMounted(() => {
                                 <span>
                                     {{ item.name }}
                                 </span>
-                                <strong>{{ nom(item.quantity) }} </strong>
+                                <div class="text-right">
+                                    <div><strong>{{ nom(item.quantity) }} </strong></div>
+                                    <div class="text-xs">{{ nom(item.price) }}</div>
+                                </div>
+                            </div>
+                            <div class="flex justify-between w-full text-sm">
+                                <div class="text-left text-xs text-gray-500">
+                                    Subtotal:
+                                </div>
+                                <div class="text-right text-sm font-semibold">
+                                    {{ nom(item.total_price) }}
+                                </div>
                             </div>
                             <div
                                 class="flex justify-start w-full text-xs text-gray-400 text-left leading-4"
