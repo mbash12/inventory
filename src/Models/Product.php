@@ -23,13 +23,17 @@ class Product extends Model
         'is_production',
         'date',
         'design_files',
-        'design_approved'
+        'design_approved',
+        'uom_code',
+        'tax_code'
     ];
 
     protected $casts = [
         'id' => 'integer',
         'project' => 'integer',
-        'is_production' => 'boolean'
+        'is_production' => 'boolean',
+        'uom_code' => 'string',
+        'tax_code' => 'string'
     ];
 
     public function project(): BelongsTo

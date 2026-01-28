@@ -12,6 +12,9 @@ import {
     createPodeposit,
     updatePodeposit,
     getPodeposit,
+    APIURL,
+    getUomList,
+    getTaxList
 } from "../services/service";
 import { useRoute, useRouter } from "vue-router";
 import { loading } from "../services/router";
@@ -60,6 +63,10 @@ const state = reactive({
     manual_total_price: false, // Flag to indicate if user wants to manually enter total price
     back: null,
 });
+
+// Reactive variables for UOM and Tax options
+const uoms = ref([]);
+const taxes = ref([]);
 
 // Computed property to calculate total price based on all products
 const calculatedTotalPrice = computed(() => {
@@ -226,6 +233,24 @@ const submit = () => {
         },
     ];
 
+    // Process products to include UOM and Tax codes
+    products.forEach(productGroup => {
+        if (productGroup.products) {
+            productGroup.products = productGroup.products.map(product => {
+                // Only include product if it has a name
+                if (product.name && product.name.trim() !== '') {
+                    return {
+                        ...product,
+                        // Include UOM and Tax codes if they exist
+                        uom_code: product.uom_code || null,
+                        tax_code: product.tax_code || null
+                    };
+                }
+                return product;
+            }).filter(product => product.name && product.name.trim() !== '');
+        }
+    });
+
     // Calculate overall total price
     const overallTotalPrice = products.reduce((sum, productGroup) => {
         return sum + (productGroup.total_price || 0);
@@ -306,21 +331,25 @@ const submit = () => {
 };
 const generateProds = () => {
     state.prd.gimmick = {
-        products: [{ name: "", quantity: "", price: "", description: "" }],
+        products: [{ name: "", quantity: "", uom_code: null, tax_code: null, price: "", description: "" }],
     };
     state.prd.design = {
-        products: [{ name: "", quantity: "", price: "", description: "" }],
+        products: [{ name: "", quantity: "", uom_code: null, tax_code: null, price: "", description: "" }],
     };
     state.prd.printing = {
-        products: [{ name: "", quantity: "", price: "", description: "" }],
+        products: [{ name: "", quantity: "", uom_code: null, tax_code: null, price: "", description: "" }],
     };
     state.prd.payment = {
-        products: [{ name: "", price: "", description: "" }],
+        products: [{ name: "", uom_code: null, tax_code: null, price: "", description: "" }],
     };
 };
 onMounted(() => {
     state.pic_name = currentUser.user.user.name;
     state.back = route.query.back;
+
+    // Load UOM and Tax data from accounting API
+    loadUomAndTaxData();
+
     if (currentUrl.includes("edit")) {
         loading();
         let id = currentUrl.split("/").slice(-1);
@@ -357,12 +386,18 @@ onMounted(() => {
                                               product.quantity ? parseInt(product.quantity) : 0;
                             return {
                                 ...product,
+                                // Map ID fields to code fields if they exist
+                                uom_code: product.uom_code || (product.unit_id ? product.unit_id : null),
+                                tax_code: product.tax_code || (product.tax_id ? product.tax_id : null),
                                 price: product.price || product.quantity || "", // Use price if available, otherwise quantity for old data
                                 total_price: product.total_price || amountValue
                             };
                         } else {
                             return {
                                 ...product,
+                                // Map ID fields to code fields if they exist
+                                uom_code: product.uom_code || (product.unit_id ? product.unit_id : null),
+                                tax_code: product.tax_code || (product.tax_id ? product.tax_id : null),
                                 price: product.price || "",
                                 total_price: product.total_price || (product.quantity && product.price ? parseInt(product.quantity) * parseInt(product.price) : 0)
                             };
@@ -408,6 +443,25 @@ onMounted(() => {
         generateProds();
     }
 });
+
+// Function to load UOM and Tax data from accounting API
+async function loadUomAndTaxData() {
+    try {
+        // Fetch UOM data using service function (uses default company ID)
+        const uomResult = await getUomList();
+        if (uomResult.code === 200) {
+            uoms.value = uomResult.data;
+        }
+
+        // Fetch Tax data using service function (uses default company ID)
+        const taxResult = await getTaxList();
+        if (taxResult.code === 200) {
+            taxes.value = taxResult.data;
+        }
+    } catch (error) {
+        console.error('Error loading UOM and Tax data:', error);
+    }
+}
 </script>
 
 <template>
@@ -845,6 +899,12 @@ onMounted(() => {
                                     Quantity
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
+                                    UOM
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    Tax
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
                                     Price
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
@@ -914,6 +974,76 @@ onMounted(() => {
                                                     `products.${i}.quantity`
                                                 ][0].replace(
                                                     `products.${i}.quantity `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
+                                        <select
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
+                                            v-model="product.uom_code"
+                                        >
+                                            <option value="">Select UOM</option>
+                                            <option
+                                                v-for="uom in uoms"
+                                                :key="uom.id"
+                                                :value="uom.code"
+                                            >
+                                                {{ uom.name }} ({{ uom.code }})
+                                            </option>
+                                        </select>
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `products.${i}.uom_code`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `products.${i}.uom_code`
+                                                ][0].replace(
+                                                    `products.${i}.uom_code `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
+                                        <select
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
+                                            v-model="product.tax_code"
+                                        >
+                                            <option value="">Select Tax</option>
+                                            <option
+                                                v-for="tax in taxes"
+                                                :key="tax.id"
+                                                :value="tax.code"
+                                            >
+                                                {{ tax.name }} ({{ tax.tax_percentage }}%) ({{ tax.code }})
+                                            </option>
+                                        </select>
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `products.${i}.tax_code`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `products.${i}.tax_code`
+                                                ][0].replace(
+                                                    `products.${i}.tax_code `,
                                                     ""
                                                 )
                                             }}</span
@@ -1001,7 +1131,7 @@ onMounted(() => {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="6">
+                                <td colspan="8">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -1011,6 +1141,8 @@ onMounted(() => {
                                                     {
                                                         name: '',
                                                         quantity: '',
+                                                        uom_code: null,
+                                                        tax_code: null,
                                                         price: '',
                                                         description: '',
                                                     }
@@ -1035,6 +1167,12 @@ onMounted(() => {
 
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Quantity
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    UOM
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    Tax
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Price
@@ -1106,6 +1244,76 @@ onMounted(() => {
                                                     `products.${i}.quantity`
                                                 ][0].replace(
                                                     `products.${i}.quantity `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
+                                        <select
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
+                                            v-model="product.uom_code"
+                                        >
+                                            <option value="">Select UOM</option>
+                                            <option
+                                                v-for="uom in uoms"
+                                                :key="uom.id"
+                                                :value="uom.code"
+                                            >
+                                                {{ uom.name }} ({{ uom.code }})
+                                            </option>
+                                        </select>
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `products.${i}.uom_code`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `products.${i}.uom_code`
+                                                ][0].replace(
+                                                    `products.${i}.uom_code `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
+                                        <select
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
+                                            v-model="product.tax_code"
+                                        >
+                                            <option value="">Select Tax</option>
+                                            <option
+                                                v-for="tax in taxes"
+                                                :key="tax.id"
+                                                :value="tax.code"
+                                            >
+                                                {{ tax.name }} ({{ tax.tax_percentage }}%) ({{ tax.code }})
+                                            </option>
+                                        </select>
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `products.${i}.tax_code`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `products.${i}.tax_code`
+                                                ][0].replace(
+                                                    `products.${i}.tax_code `,
                                                     ""
                                                 )
                                             }}</span
@@ -1193,7 +1401,7 @@ onMounted(() => {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="6">
+                                <td colspan="8">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -1202,6 +1410,8 @@ onMounted(() => {
                                                 state.prd.design.products.push({
                                                     name: '',
                                                     quantity: '',
+                                                    uom_code: null,
+                                                    tax_code: null,
                                                     price: '',
                                                     description: '',
                                                 })
@@ -1224,6 +1434,12 @@ onMounted(() => {
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Quantity
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    UOM
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    Tax
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Price
@@ -1295,6 +1511,76 @@ onMounted(() => {
                                                     `products.${i}.quantity`
                                                 ][0].replace(
                                                     `products.${i}.quantity `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
+                                        <select
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
+                                            v-model="product.uom_code"
+                                        >
+                                            <option value="">Select UOM</option>
+                                            <option
+                                                v-for="uom in uoms"
+                                                :key="uom.id"
+                                                :value="uom.code"
+                                            >
+                                                {{ uom.name }} ({{ uom.code }})
+                                            </option>
+                                        </select>
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `products.${i}.uom_code`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `products.${i}.uom_code`
+                                                ][0].replace(
+                                                    `products.${i}.uom_code `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
+                                        <select
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
+                                            v-model="product.tax_code"
+                                        >
+                                            <option value="">Select Tax</option>
+                                            <option
+                                                v-for="tax in taxes"
+                                                :key="tax.id"
+                                                :value="tax.code"
+                                            >
+                                                {{ tax.name }} ({{ tax.tax_percentage }}%) ({{ tax.code }})
+                                            </option>
+                                        </select>
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `products.${i}.tax_code`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `products.${i}.tax_code`
+                                                ][0].replace(
+                                                    `products.${i}.tax_code `,
                                                     ""
                                                 )
                                             }}</span
@@ -1382,7 +1668,7 @@ onMounted(() => {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="6">
+                                <td colspan="8">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -1392,6 +1678,8 @@ onMounted(() => {
                                                     {
                                                         name: '',
                                                         quantity: '',
+                                                        uom_code: null,
+                                                        tax_code: null,
                                                         price: '',
                                                         description: '',
                                                     }
@@ -1415,6 +1703,12 @@ onMounted(() => {
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-1/4">
                                     Account Number
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    UOM
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                    Tax
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Amount
@@ -1491,6 +1785,76 @@ onMounted(() => {
                                     <div
                                         class="flex items-center flex-col gap-1"
                                     >
+                                        <select
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
+                                            v-model="product.uom_code"
+                                        >
+                                            <option value="">Select UOM</option>
+                                            <option
+                                                v-for="uom in uoms"
+                                                :key="uom.id"
+                                                :value="uom.code"
+                                            >
+                                                {{ uom.name }} ({{ uom.code }})
+                                            </option>
+                                        </select>
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `products.${i}.uom_code`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `products.${i}.uom_code`
+                                                ][0].replace(
+                                                    `products.${i}.uom_code `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
+                                        <select
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
+                                            v-model="product.tax_code"
+                                        >
+                                            <option value="">Select Tax</option>
+                                            <option
+                                                v-for="tax in taxes"
+                                                :key="tax.id"
+                                                :value="tax.code"
+                                            >
+                                                {{ tax.name }} ({{ tax.tax_percentage }}%) ({{ tax.code }})
+                                            </option>
+                                        </select>
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `products.${i}.tax_code`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `products.${i}.tax_code`
+                                                ][0].replace(
+                                                    `products.${i}.tax_code `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
                                         <INumber
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent"
                                             placeholder="e.g. : 255.000 "
@@ -1528,7 +1892,7 @@ onMounted(() => {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="4">
+                                <td colspan="6">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -1537,6 +1901,8 @@ onMounted(() => {
                                                 state.prd.payment.products.push(
                                                     {
                                                         name: '',
+                                                        uom_code: null,
+                                                        tax_code: null,
                                                         price: '',
                                                         description: '',
                                                     }

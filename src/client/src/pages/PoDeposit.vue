@@ -11,6 +11,8 @@ import {
     updatePodeposit,
     createPodeposit,
     nom,
+    getUomList,
+    getTaxList
 } from "../services/service";
 import { useRoute, useRouter } from "vue-router";
 import { loading } from "../services/router";
@@ -58,6 +60,10 @@ const state = reactive({
     selected_deposit: null,
     selectedGroup: null,
 });
+
+// Reactive variables for UOM and Tax options
+const uoms = ref([]);
+const taxes = ref([]);
 const handleDeleteGroup = (type) => {
     let i = type == "project" ? state.selected_group : state.selected_po;
     if (type == "deposit") {
@@ -242,6 +248,36 @@ const submit = () => {
     // if (state.products_group?.length < 1) return;
     // if (state.products_group.every((e) => !e.products)) return;
     loading();
+
+    // Process products to include UOM and Tax codes
+    const processedProductsGroup = state.products_group.map(group => {
+        return {
+            ...group,
+            products: group.products.map(product => {
+                return {
+                    ...product,
+                    // Include UOM and Tax codes if they exist
+                    uom_code: product.uom_code || null,
+                    tax_code: product.tax_code || null
+                };
+            })
+        };
+    });
+
+    const processedPoDeposits = state.po_deposits.map(deposit => {
+        return {
+            ...deposit,
+            products: deposit.products.map(product => {
+                return {
+                    ...product,
+                    // Include UOM and Tax codes if they exist
+                    uom_code: product.uom_code || null,
+                    tax_code: product.tax_code || null
+                };
+            })
+        };
+    });
+
     let data = {
         job_number: state.job_number,
         client_po_date: state.client_po_date,
@@ -254,8 +290,8 @@ const submit = () => {
         budget: state.budget ?? 0,
         expense: state.expense ?? 0,
         balance: state.balance ?? 0,
-        products_group: state.products_group,
-        po_deposits: state.po_deposits,
+        products_group: processedProductsGroup,
+        po_deposits: processedPoDeposits,
     };
     if (state.id === null) {
         createPodeposit(data).then((r) => {
@@ -279,6 +315,25 @@ const submit = () => {
         });
     }
 };
+// Function to load UOM and Tax data from accounting API
+async function loadUomAndTaxData() {
+    try {
+        // Fetch UOM data using service function
+        const uomResult = await getUomList();
+        if (uomResult.code === 200) {
+            uoms.value = uomResult.data;
+        }
+
+        // Fetch Tax data using service function
+        const taxResult = await getTaxList();
+        if (taxResult.code === 200) {
+            taxes.value = taxResult.data;
+        }
+    } catch (error) {
+        console.error('Error loading UOM and Tax data:', error);
+    }
+}
+
 const init = () => {
     loading();
     getClientList().then((r) => {
@@ -286,6 +341,10 @@ const init = () => {
             state.clients = r.data;
         }
     });
+
+    // Load UOM and Tax data from accounting API
+    loadUomAndTaxData();
+
     state.pic_name = currentUser.user.user.name;
     // addNewGroup();
     // addNewDeposit();
@@ -323,6 +382,9 @@ const init = () => {
                             products: e.products_data.map((ee) => ({
                                 ...ee,
                                 is_real: e.is_real,
+                                // Map ID fields to code fields if they exist
+                                uom_code: ee.uom_code || (ee.unit_id ? ee.unit_id : null),
+                                tax_code: ee.tax_code || (ee.tax_id ? ee.tax_id : null)
                             })),
                         })),
                 ];
@@ -385,6 +447,8 @@ const addNewGroup = () => {
                 price: null,
                 total_price: null,
                 is_production: true,
+                uom_code: null,
+                tax_code: null,
             },
         ],
     });
@@ -410,6 +474,8 @@ const addNewDeposit = () => {
                 description: null,
                 price: null,
                 total_price: null,
+                uom_code: null,
+                tax_code: null,
             },
         ],
     });
@@ -759,6 +825,26 @@ watch(
                                     </strong>
                                 </div>
                                 <div
+                                    class="flex justify-between w-full text-sm"
+                                >
+                                    <div class="text-left text-xs text-gray-500">
+                                        UOM:
+                                    </div>
+                                    <div class="text-right text-xs">
+                                        {{ item.uom_code || '-' }}
+                                    </div>
+                                </div>
+                                <div
+                                    class="flex justify-between w-full text-sm"
+                                >
+                                    <div class="text-left text-xs text-gray-500">
+                                        Tax:
+                                    </div>
+                                    <div class="text-right text-xs">
+                                        {{ item.tax_code || '-' }}
+                                    </div>
+                                </div>
+                                <div
                                     class="flex justify-start w-full text-xs text-gray-400 text-left leading-4"
                                     v-html="
                                         item.description?.replace(
@@ -919,6 +1005,26 @@ watch(
                                                     : nom(item.total_price ?? 0)
                                             }}
                                         </strong>
+                                    </div>
+                                    <div
+                                        class="flex justify-between w-full text-sm"
+                                    >
+                                        <div class="text-left text-xs text-gray-500">
+                                            UOM:
+                                        </div>
+                                        <div class="text-right text-xs">
+                                            {{ item.uom_code || '-' }}
+                                        </div>
+                                    </div>
+                                    <div
+                                        class="flex justify-between w-full text-sm"
+                                    >
+                                        <div class="text-left text-xs text-gray-500">
+                                            Tax:
+                                        </div>
+                                        <div class="text-right text-xs">
+                                            {{ item.tax_code || '-' }}
+                                        </div>
                                     </div>
                                     <div
                                         class="flex justify-start w-full text-xs text-gray-400 text-left leading-4"
@@ -1196,6 +1302,8 @@ watch(
         :show="state.edit_open"
         :items="state.selecteditems"
         :selected="state.selected"
+        :uoms="uoms"
+        :taxes="taxes"
         @hide="closeModal"
         @action="handleAction"
         @delete="handleDelete"

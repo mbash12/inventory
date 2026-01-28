@@ -1,5 +1,9 @@
 import { apilist } from "./apilist";
 import { reactive, ref } from "vue";
+
+// Constants for accounting integration - Easy to update
+const DEFAULT_COMPANY_ID = 12; // Change this to your default company ID
+
 // export const URLL = "";
 export const URLL = "http://localhost:8000";
 // export const URLL = "https://inventory.dotcomsolution.co.id";
@@ -162,6 +166,43 @@ export const getFollowup = async (id) => await api("getFollowup", { route: "/" +
 export const createFollowup = async (id, data) => await api("createFollowup", { route: "/" + id, body: data });
 export const updateFollowup = async (id, data) => await api("updateFollowup", { route: "/" + id, body: data });
 export const getReport = async (year) => await api("getReport", { params: {year:year} });
+
+// API functions for getting UOM and Tax data from accounting app
+// Using proxy through inventory app to handle authentication with accounting app
+
+export const getUomList = async (companyId = DEFAULT_COMPANY_ID) => {
+    const headers = {
+        "Content-Type": "application/json",
+    };
+
+    // Add authorization header if user is logged in (same as other API calls)
+    if (currentUser.user && currentUser.user.token) {
+        headers["Authorization"] = `Bearer ${currentUser.user.token}`;
+    }
+
+    const response = await fetch(`${APIURL}/proxy/accounting/unit?company_id=${companyId}`, {
+        method: 'GET',
+        headers: headers
+    });
+    return response.json();
+};
+
+export const getTaxList = async (companyId = DEFAULT_COMPANY_ID) => {
+    const headers = {
+        "Content-Type": "application/json",
+    };
+
+    // Add authorization header if user is logged in (same as other API calls)
+    if (currentUser.user && currentUser.user.token) {
+        headers["Authorization"] = `Bearer ${currentUser.user.token}`;
+    }
+
+    const response = await fetch(`${APIURL}/proxy/accounting/taxes?company_id=${companyId}`, {
+        method: 'GET',
+        headers: headers
+    });
+    return response.json();
+};
 
 
 export const sortByProperty = (arr, property, direction = 'asc') =>

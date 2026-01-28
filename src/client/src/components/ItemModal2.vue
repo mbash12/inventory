@@ -13,6 +13,8 @@ const props = defineProps({
     items: Array,
     selected: Number,
     selectedDeposit: Number,
+    uoms: Array,
+    taxes: Array,
 });
 const state = reactive({
     client_po_number: null,
@@ -23,6 +25,8 @@ const state = reactive({
     total_price: null,
     production: false,
     is_real: false,
+    uom_code: null,
+    tax_code: null,
 });
 watch(
     () => state.quantity * state.price,
@@ -42,6 +46,8 @@ watch(props, () => {
             state.client_po_number = data.client_po_number;
             state.production = data.is_production;
             state.is_real = data.is_real;
+            state.uom_code = data.uom_code || null;
+            state.tax_code = data.tax_code || null;
         } else {
             state.name = null;
             state.quantity = null;
@@ -51,6 +57,8 @@ watch(props, () => {
             state.client_po_number = props.selectedDeposit;
             state.production = false;
             state.is_real = false;
+            state.uom_code = null;
+            state.tax_code = null;
         }
     }
 });
@@ -62,6 +70,8 @@ const emitAction = () => {
         price: state.price,
         total_price: state.total_price,
         is_production: state.production,
+        uom_code: state.uom_code,
+        tax_code: state.tax_code,
     });
 };
 const emitDelete = () => {
@@ -110,6 +120,40 @@ const emitDelete = () => {
                             v-model="state.price"
                             required
                         />
+                    </label>
+                </div>
+                <div class="flex w-full gap-2">
+                    <label class="flex flex-col items-start relative w-full">
+                        <span class="text-sm text-blue-gray-400">UOM</span>
+                        <select
+                            class="border-b w-full h-10 bg-transparent text-sm text-black"
+                            v-model="state.uom_code"
+                        >
+                            <option value="">Select UOM</option>
+                            <option
+                                v-for="uom in props.uoms"
+                                :key="uom.id"
+                                :value="uom.code"
+                            >
+                                {{ uom.name }} ({{ uom.code }})
+                            </option>
+                        </select>
+                    </label>
+                    <label class="flex flex-col items-start relative w-full">
+                        <span class="text-sm text-blue-gray-400">Tax</span>
+                        <select
+                            class="border-b w-full h-10 bg-transparent text-sm text-black"
+                            v-model="state.tax_code"
+                        >
+                            <option value="">Select Tax</option>
+                            <option
+                                v-for="tax in props.taxes"
+                                :key="tax.id"
+                                :value="tax.code"
+                            >
+                                {{ tax.name }} ({{ tax.tax_percentage }}%) ({{ tax.code }})
+                            </option>
+                        </select>
                     </label>
                 </div>
                 <div class="flex w-full">

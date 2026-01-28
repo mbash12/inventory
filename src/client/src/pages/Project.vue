@@ -8,6 +8,8 @@ import {
     currentUser,
     getClientList,
     nom,
+    getUomList,
+    getTaxList
 } from "../services/service";
 import { useRoute, useRouter } from "vue-router";
 import { loading } from "../services/router";
@@ -44,6 +46,10 @@ const state = reactive({
     status: "production",
     products: [],
 });
+
+// Reactive variables for UOM and Tax options
+const uoms = ref([]);
+const taxes = ref([]);
 
 // Computed property to calculate total price based on all products
 const calculatedTotalPrice = computed(() => {
@@ -150,6 +156,16 @@ const submit = () => {
         finalTotalPrice = calculatedTotalPrice.value;
     }
 
+    // Process products to include UOM and Tax codes
+    const processedProducts = state.products.map(product => {
+        return {
+            ...product,
+            // Include UOM and Tax codes if they exist
+            uom_code: product.uom_code || null,
+            tax_code: product.tax_code || null
+        };
+    });
+
     let data = {
         title: state.title,
         total_price: finalTotalPrice, // Use manual input or calculated value
@@ -160,7 +176,7 @@ const submit = () => {
         client_company: state.client_company,
         client_pic_name: state.client_pic_name,
         status: state.status,
-        products: state.products,
+        products: processedProducts,
     };
     if (state.id === null) {
         createProject(data).then((r) => {
@@ -182,8 +198,31 @@ const submit = () => {
         });
     }
 };
+// Function to load UOM and Tax data from accounting API
+async function loadUomAndTaxData() {
+    try {
+        // Fetch UOM data using service function
+        const uomResult = await getUomList();
+        if (uomResult.code === 200) {
+            uoms.value = uomResult.data;
+        }
+
+        // Fetch Tax data using service function
+        const taxResult = await getTaxList();
+        if (taxResult.code === 200) {
+            taxes.value = taxResult.data;
+        }
+    } catch (error) {
+        console.error('Error loading UOM and Tax data:', error);
+    }
+}
+
 onMounted(() => {
     state.pic_name = currentUser.user.user.name;
+
+    // Load UOM and Tax data from accounting API
+    loadUomAndTaxData();
+
     if (currentUrl.includes("edit")) {
         state.mode = "edit";
         loading();
@@ -211,7 +250,10 @@ onMounted(() => {
                 state.products = data.products_data.map(product => ({
                     ...product,
                     price: product.price || 0,
-                    total_price: product.total_price || (product.quantity * (product.price || 0))
+                    total_price: product.total_price || (product.quantity * (product.price || 0)),
+                    // Map ID fields to code fields if they exist
+                    uom_code: product.uom_code || (product.unit_id ? product.unit_id : null),
+                    tax_code: product.tax_code || (product.tax_id ? product.tax_id : null)
                 }));
 
                 if (data.client_po_number == null) {
@@ -443,6 +485,22 @@ onMounted(() => {
                             </div>
                             <div class="flex justify-between w-full text-sm">
                                 <div class="text-left text-xs text-gray-500">
+                                    UOM:
+                                </div>
+                                <div class="text-right text-xs">
+                                    {{ item.uom_code || '-' }}
+                                </div>
+                            </div>
+                            <div class="flex justify-between w-full text-sm">
+                                <div class="text-left text-xs text-gray-500">
+                                    Tax:
+                                </div>
+                                <div class="text-right text-xs">
+                                    {{ item.tax_code || '-' }}
+                                </div>
+                            </div>
+                            <div class="flex justify-between w-full text-sm">
+                                <div class="text-left text-xs text-gray-500">
                                     Subtotal:
                                 </div>
                                 <div class="text-right text-sm font-semibold">
@@ -517,6 +575,8 @@ onMounted(() => {
         :show="state.edit_open"
         :items="state.products"
         :selected="state.selected"
+        :uoms="uoms"
+        :taxes="taxes"
         @hide="closeModal"
         @action="handleAction"
         @delete="handleDelete"

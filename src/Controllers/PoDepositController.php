@@ -111,7 +111,7 @@ class PoDepositController extends Controller
 
             $project->title = $projectData['title'] ?? null;
             $project->job_number = $projectData['job_number'];
-            $project->client_po_date = $projectData['client_po_date'] ?? $deposit->client_po_date;
+            $project->client_po_date = $projectData['client_po_date'] ?? ($deposit ? $deposit->client_po_date : null);
             $project->client_po_number = $projectData['client_po_number'];
             $project->client_pic_name = $real ? $podeposit->client_pic_name : $projectData['client_pic_name'];
             $project->status = $projectData['status'] ?? 'new';
@@ -169,7 +169,7 @@ class PoDepositController extends Controller
             }
             $project->title = $projectData['title'] ?? null;
             $project->job_number =  $projectData['job_number'];
-            $project->client_po_date = $projectData['client_po_date'] ?? $deposit->client_po_date;
+            $project->client_po_date = $projectData['client_po_date'] ?? ($deposit ? $deposit->client_po_date : null);
             $project->client_po_number = $projectData['client_po_number'];
             $project->client_pic_name = $real ? $podeposit->client_pic_name : $projectData['client_pic_name'];
             

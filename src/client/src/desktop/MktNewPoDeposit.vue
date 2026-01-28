@@ -11,6 +11,8 @@ import {
     nom,
     getPodeposit,
     goto,
+    getUomList,
+    getTaxList
 } from "../services/service";
 import Select1 from "../components/Select1.vue";
 import INumber from "../components/INumber.vue";
@@ -60,6 +62,10 @@ const state = reactive({
         gr: false,
     }
 });
+
+// Reactive variables for UOM and Tax options
+const uoms = ref([]);
+const taxes = ref([]);
 
 const deleteSelectedProduct = () => {
     if (state.selected[0] == "deposit") {
@@ -140,18 +146,38 @@ const setDelete = (type, i, ii) => {
 };
 const submit = () => {
     loading();
+
+    // Process products to include UOM and Tax codes
     const actual = state.products_group.map((g) => {
         return {
             ...g,
-            documents: state.documents
+            documents: state.documents,
+            products: g.products.map(product => {
+                return {
+                    ...product,
+                    // Include UOM and Tax codes if they exist
+                    uom_code: product.uom_code || null,
+                    tax_code: product.tax_code || null
+                };
+            })
         };
-    })
+    });
+
     const nonactual = state.po_deposits.map((g) => {
         return {
             ...g,
-            documents: state.documents
+            documents: state.documents,
+            products: g.products.map(product => {
+                return {
+                    ...product,
+                    // Include UOM and Tax codes if they exist
+                    uom_code: product.uom_code || null,
+                    tax_code: product.tax_code || null
+                };
+            })
         };
-    })
+    });
+
     let data = {
         job_number: state.job_number,
         client_po_date: state.client_po_date,
@@ -192,6 +218,25 @@ const submit = () => {
         });
     }
 };
+// Function to load UOM and Tax data from accounting API
+async function loadUomAndTaxData() {
+    try {
+        // Fetch UOM data using service function
+        const uomResult = await getUomList();
+        if (uomResult.code === 200) {
+            uoms.value = uomResult.data;
+        }
+
+        // Fetch Tax data using service function
+        const taxResult = await getTaxList();
+        if (taxResult.code === 200) {
+            taxes.value = taxResult.data;
+        }
+    } catch (error) {
+        console.error('Error loading UOM and Tax data:', error);
+    }
+}
+
 const init = () => {
     loading();
     getClientList().then((r) => {
@@ -199,6 +244,10 @@ const init = () => {
             state.clients = r.data;
         }
     });
+
+    // Load UOM and Tax data from accounting API
+    loadUomAndTaxData();
+
     state.pic_name = currentUser.user.user.name;
     addNewDeposit(true);
     // addNewGroup();
@@ -233,7 +282,12 @@ const init = () => {
                         .filter((e) => e.is_real)
                         .map((e) => ({
                             ...e,
-                            products: e.products_data,
+                            products: e.products_data.map((product) => ({
+                                ...product,
+                                // Map ID fields to code fields if they exist
+                                uom_code: product.uom_code || (product.unit_id ? product.unit_id : null),
+                                tax_code: product.tax_code || (product.tax_id ? product.tax_id : null)
+                            })),
                         })),
                 ];
                 state.po_deposits = [
@@ -241,7 +295,12 @@ const init = () => {
                         .filter((e) => !e.is_real)
                         .map((e) => ({
                             ...e,
-                            products: e.products_data,
+                            products: e.products_data.map((product) => ({
+                                ...product,
+                                // Map ID fields to code fields if they exist
+                                uom_code: product.uom_code || (product.unit_id ? product.unit_id : null),
+                                tax_code: product.tax_code || (product.tax_id ? product.tax_id : null)
+                            })),
                             client_po_date: dayjs(e.client_po_date).format(
                                 "YYYY-MM-DD"
                             ),
@@ -302,6 +361,8 @@ const addNewGroup = (po_number) => {
                 price: null,
                 total_price: null,
                 is_production: true,
+                uom_code: null,
+                tax_code: null,
             },
         ],
     });
@@ -385,6 +446,8 @@ const addNewDeposit = (force = false) => {
                 description: null,
                 price: null,
                 total_price: null,
+                uom_code: null,
+                tax_code: null,
             },
         ],
     });
@@ -989,6 +1052,16 @@ watch(
                                                 <th
                                                     class="text-left text-sm px-1 py-2 w-120px"
                                                 >
+                                                    UOM
+                                                </th>
+                                                <th
+                                                    class="text-left text-sm px-1 py-2 w-120px"
+                                                >
+                                                    Tax
+                                                </th>
+                                                <th
+                                                    class="text-left text-sm px-1 py-2 w-120px"
+                                                >
                                                     Price/Pcs
                                                 </th>
                                                 <th
@@ -1075,6 +1148,76 @@ watch(
                                                                     `products.${ii}.quantity`
                                                                 ][0].replace(
                                                                     `products.${ii}.quantity `,
+                                                                    ""
+                                                                )
+                                                            }}</span
+                                                        >
+                                                    </div>
+                                                </td>
+                                                <td class="">
+                                                    <div
+                                                        class="flex items-center flex-col gap-1"
+                                                    >
+                                                        <select
+                                                            class="w-full h-40px px-1 text-sm bg-transparent border-none"
+                                                            v-model="product.uom_code"
+                                                        >
+                                                            <option value="">Select UOM</option>
+                                                            <option
+                                                                v-for="uom in uoms"
+                                                                :key="uom.id"
+                                                                :value="uom.code"
+                                                            >
+                                                                {{ uom.name }} ({{ uom.code }})
+                                                            </option>
+                                                        </select>
+                                                        <span
+                                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                                            v-if="
+                                                                state.errors.hasOwnProperty(
+                                                                    `products.${ii}.uom_code`
+                                                                )
+                                                            "
+                                                            >{{
+                                                                state.errors[
+                                                                    `products.${ii}.uom_code`
+                                                                ][0].replace(
+                                                                    `products.${ii}.uom_code `,
+                                                                    ""
+                                                                )
+                                                            }}</span
+                                                        >
+                                                    </div>
+                                                </td>
+                                                <td class="">
+                                                    <div
+                                                        class="flex items-center flex-col gap-1"
+                                                    >
+                                                        <select
+                                                            class="w-full h-40px px-1 text-sm bg-transparent border-none"
+                                                            v-model="product.tax_code"
+                                                        >
+                                                            <option value="">Select Tax</option>
+                                                            <option
+                                                                v-for="tax in taxes"
+                                                                :key="tax.id"
+                                                                :value="tax.code"
+                                                            >
+                                                                {{ tax.name }} ({{ tax.tax_percentage }}%) ({{ tax.code }})
+                                                            </option>
+                                                        </select>
+                                                        <span
+                                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                                            v-if="
+                                                                state.errors.hasOwnProperty(
+                                                                    `products.${ii}.tax_code`
+                                                                )
+                                                            "
+                                                            >{{
+                                                                state.errors[
+                                                                    `products.${ii}.tax_code`
+                                                                ][0].replace(
+                                                                    `products.${ii}.tax_code `,
                                                                     ""
                                                                 )
                                                             }}</span
@@ -1262,6 +1405,8 @@ watch(
                                                                             total_price:
                                                                                 null,
                                                                             is_production: true,
+                                                                            uom_code: null,
+                                                                            tax_code: null,
                                                                         }
                                                                     )
                                                             "
@@ -1478,6 +1623,16 @@ watch(
                                                     <th
                                                         class="text-left text-sm px-1 py-2 w-120px"
                                                     >
+                                                        UOM
+                                                    </th>
+                                                    <th
+                                                        class="text-left text-sm px-1 py-2 w-120px"
+                                                    >
+                                                        Tax
+                                                    </th>
+                                                    <th
+                                                        class="text-left text-sm px-1 py-2 w-120px"
+                                                    >
                                                         Price/Pcs
                                                     </th>
                                                     <th
@@ -1570,6 +1725,76 @@ watch(
                                                                         `products.${ii}.quantity`
                                                                     ][0].replace(
                                                                         `products.${ii}.quantity `,
+                                                                        ""
+                                                                    )
+                                                                }}</span
+                                                            >
+                                                        </div>
+                                                    </td>
+                                                    <td class="">
+                                                        <div
+                                                            class="flex items-center flex-col gap-1"
+                                                        >
+                                                            <select
+                                                                class="w-full h-40px px-1 text-sm bg-transparent border-none"
+                                                                v-model="product.uom_code"
+                                                            >
+                                                                <option value="">Select UOM</option>
+                                                                <option
+                                                                    v-for="uom in uoms"
+                                                                    :key="uom.id"
+                                                                    :value="uom.code"
+                                                                >
+                                                                    {{ uom.name }} ({{ uom.code }})
+                                                                </option>
+                                                            </select>
+                                                            <span
+                                                                class="text-xs text-red-500 text-left w-full block pl-4"
+                                                                v-if="
+                                                                    state.errors.hasOwnProperty(
+                                                                        `products.${ii}.uom_code`
+                                                                    )
+                                                                "
+                                                                >{{
+                                                                    state.errors[
+                                                                        `products.${ii}.uom_code`
+                                                                    ][0].replace(
+                                                                        `products.${ii}.uom_code `,
+                                                                        ""
+                                                                    )
+                                                                }}</span
+                                                            >
+                                                        </div>
+                                                    </td>
+                                                    <td class="">
+                                                        <div
+                                                            class="flex items-center flex-col gap-1"
+                                                        >
+                                                            <select
+                                                                class="w-full h-40px px-1 text-sm bg-transparent border-none"
+                                                                v-model="product.tax_code"
+                                                            >
+                                                                <option value="">Select Tax</option>
+                                                                <option
+                                                                    v-for="tax in taxes"
+                                                                    :key="tax.id"
+                                                                    :value="tax.code"
+                                                                >
+                                                                    {{ tax.name }} ({{ tax.tax_percentage }}%) ({{ tax.code }})
+                                                                </option>
+                                                            </select>
+                                                            <span
+                                                                class="text-xs text-red-500 text-left w-full block pl-4"
+                                                                v-if="
+                                                                    state.errors.hasOwnProperty(
+                                                                        `products.${ii}.tax_code`
+                                                                    )
+                                                                "
+                                                                >{{
+                                                                    state.errors[
+                                                                        `products.${ii}.tax_code`
+                                                                    ][0].replace(
+                                                                        `products.${ii}.tax_code `,
                                                                         ""
                                                                     )
                                                                 }}</span
@@ -1792,6 +2017,8 @@ watch(
                                                                                 total_price:
                                                                                     null,
                                                                                 is_production: true,
+                                                                                uom_code: null,
+                                                                                tax_code: null,
                                                                             }
                                                                         )
                                                                 "

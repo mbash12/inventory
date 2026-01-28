@@ -166,6 +166,8 @@ function getMimeType($extension) {
 
 
 
+use Src\Controllers\AccountingProxyController;
+
 Route::get('/check-db-connection', function () {
     try {
         DB::connection()->getPdo();
@@ -179,4 +181,10 @@ Route::get('/check-db-connection', function () {
             'message' => 'Database connection failed: ' . $e->getMessage(),
         ], 500);
     }
+});
+
+// Accounting integration proxy routes
+Route::prefix('proxy/accounting')->group(function () {
+    Route::get('/unit', [AccountingProxyController::class, 'getUnits']);
+    Route::get('/taxes', [AccountingProxyController::class, 'getTaxes']);
 });
