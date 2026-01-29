@@ -12,7 +12,10 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // $schedule->command('inspire')->hourly();
+        // Auto-sync unsynchronized PO Deposits
+        $schedule->command('projects:auto-sync --company-id=12')
+            ->withoutOverlapping()
+            ->onOneServer();
     }
 
     /**

@@ -16,6 +16,7 @@ use Src\Controllers\ThreadsController;
 use Src\Controllers\FollowupController;
 use Src\Controllers\PoDepositController;
 use Src\Controllers\ReportController;
+use Src\Controllers\ProjectSyncController;
 
 use Illuminate\Support\Facades\Storage;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -188,4 +189,16 @@ Route::prefix('proxy/accounting')->group(function () {
     Route::get('/unit', [AccountingProxyController::class, 'getUnits']);
     Route::get('/taxes', [AccountingProxyController::class, 'getTaxes']);
     Route::get('/customers', [AccountingProxyController::class, 'getCustomers']);
+});
+
+// Project to Sales Order Sync routes
+Route::prefix('sync')->group(function () {
+    // List all PO Deposits with sync status (monitoring page)
+    Route::get('/po-deposits', [ProjectSyncController::class, 'index']);
+    
+    // Get sync status for specific PO Deposit
+    Route::get('/po-deposits/{poDepositId}', [ProjectSyncController::class, 'status']);
+    
+    // Immediate retry for failed sync (no queue)
+    Route::post('/po-deposits/{poDepositId}/retry', [ProjectSyncController::class, 'retrySync']);
 });

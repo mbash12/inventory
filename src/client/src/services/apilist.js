@@ -345,6 +345,43 @@ export const apilist = {
         url:"/projects/finance",
         auth:true,
         method:'GET'
+    },
+
+    // Sync endpoints
+    getSyncJobs:{
+        url:"/sync/jobs",
+        auth:true,
+        method:'GET'
+    },
+    getSyncJob:{
+        url:"/sync/jobs",
+        auth:true,
+        method:'GET'
+    },
+    retrySyncJob:{
+        url:"/sync/jobs",
+        auth:true,
+        method:'POST'
+    },
+    syncPoDeposit:{
+        url:"/sync/sales-orders",
+        auth:true,
+        method:'POST'
+    },
+    getSyncPoDeposits:{
+        url:"/sync/po-deposits",
+        auth:true,
+        method:'GET'
+    },
+    getSyncPoDepositStatus:{
+        url:"/sync/po-deposits",
+        auth:true,
+        method:'GET'
+    },
+    retrySyncPoDeposit:{
+        url:"/sync/po-deposits",
+        auth:true,
+        method:'POST'
     }
 
 }

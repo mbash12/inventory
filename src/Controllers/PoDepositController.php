@@ -238,7 +238,12 @@ class PoDepositController extends Controller
         try {
             $query = PoDeposit::query();
             // $query->with('projects_data','projects_data.products_data');
-            $query->where('is_po_deposit', true);
+            
+            // Filter by has_client_code
+            if ($request->filled('has_client_code')) {
+                $query->whereNotNull('client_code')->where('client_code', '!=', '');
+            }
+            
             if ($request->has('status')) {
                 $statuses = explode(',', $request->input('status'));
                 $query->whereIn('status', $statuses);
@@ -271,6 +276,13 @@ class PoDepositController extends Controller
             $query->offset($offset)->limit($limit);
 
             $results = $query->get();
+            
+            // Add last sync status
+            $results->each(function($poDeposit) {
+                $poDeposit->last_sync = \Src\Models\SyncJob::where('po_deposit_id', $poDeposit->id)
+                    ->orderBy('created_at', 'desc')
+                    ->first();
+            });
 
             return response()->json([
                 'code' => 200,

@@ -35,7 +35,11 @@ class PoDeposit extends Model
         'balance',
         'title',
         'total_price',
-        'invoice_pic'
+        'invoice_pic',
+        'sync_status',
+        'last_synced_at',
+        'sync_error',
+        'sync_retry_count',
     ];
     
     protected $casts = [

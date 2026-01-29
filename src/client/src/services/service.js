@@ -233,3 +233,12 @@ export const sortByProperty = (arr, property, direction = 'asc') =>
 const compareValue = a[property] - b[property];
 return direction === 'asc' ? compareValue : -compareValue;
 });
+
+// Sync API functions
+export const getSyncJobs = async (filters) => await api("getSyncJobs", { params: filters });
+export const getSyncJob = async (id) => await api("getSyncJob", { route: "/" + id });
+export const retrySyncJob = async (id) => await api("retrySyncJob", { route: "/" + id + "/retry" });
+export const syncPoDeposit = async (data) => await api("syncPoDeposit", { body: data });
+export const getSyncPoDeposits = async (filters) => await api("getSyncPoDeposits", { params: filters });
+export const getSyncPoDepositStatus = async (id) => await api("getSyncPoDepositStatus", { route: "/" + id });
+export const retrySyncPoDeposit = async (id) => await api("retrySyncPoDeposit", { route: "/" + id + "/retry" });

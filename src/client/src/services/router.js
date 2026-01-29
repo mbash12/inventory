@@ -30,6 +30,7 @@ import Finance from "../pages/Finance.vue";
 import Followup from "../pages/Followup.vue";
 import PoDeposits from "../pages/PoDeposits.vue";
 import PoDeposit from "../pages/PoDeposit.vue";
+import SyncMonitoring from "../pages/SyncMonitoring.vue";
 import Threads from "../pages/Threads.vue";
 import NotAuthorized from "../pages/NotAuthorized.vue";
 
@@ -60,6 +61,8 @@ import MktDeadlines from "../desktop/MktDeadlines.vue";
 import MktThreads from "../desktop/MktThreads.vue";
 import MktNotAuthorized from "../desktop/MktNotAuthorized.vue";
 import MktTaskList from "../desktop/MktTaskList.vue";
+import MktSync from "../desktop/MktSync.vue";
+import MktProjectSync from "../desktop/MktProjectSync.vue";
 
 import { reactive } from "vue";
 import { checkLoggedin, isLoggedin } from "./service";
@@ -640,6 +643,15 @@ const desktopRoutes = {
             },
         },
         {
+            path: "sync-monitoring",
+            component: SyncMonitoring,
+            name: "Sync Monitoring",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "finance"],
+            },
+        },
+        {
             path: "projects/followup/:id",
             component: MktFollowup,
             name: "Desktop Follow Up Project",
@@ -691,6 +703,24 @@ const desktopRoutes = {
             meta: {
                 requiresAuth: true,
                 roles: ["admin", "marketing", "finance", "delivery",'design'],
+            },
+        },
+        {
+            path: "sync",
+            component: MktSync,
+            name: "Desktop Sync Monitor",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "finance"],
+            },
+        },
+        {
+            path: "project-sync",
+            component: MktProjectSync,
+            name: "Desktop Project Sync",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "finance"],
             },
         },
     ],

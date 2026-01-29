@@ -14,7 +14,7 @@ class AccountingProxyController extends Controller
 
     public function __construct()
     {
-        $this->accountingApiUrl = rtrim(config('app.accounting_api_url', env('ACCOUNTING_API_URL', 'http://localhost:8001/api/master')), '/');
+        $this->accountingApiUrl = rtrim(config('app.accounting_api_url', env('ACCOUNTING_API_URL', 'http://localhost:8001/api')), '/');
         $this->bearerToken = env('EPROC_INTEGRATION_BEARER');
     }
 
@@ -30,7 +30,7 @@ class AccountingProxyController extends Controller
         }
 
         Log::info('Getting units from accounting API', [
-            'url' => $this->accountingApiUrl . '/unit',
+            'url' => $this->accountingApiUrl . '/master/unit',
             'company_id' => $companyId,
             'bearer_token_set' => !empty($this->bearerToken),
             'bearer_token_length' => strlen($this->bearerToken ?? '')
@@ -40,7 +40,7 @@ class AccountingProxyController extends Controller
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->bearerToken,
                 'Accept' => 'application/json',
-            ])->get($this->accountingApiUrl . '/unit', [
+            ])->get($this->accountingApiUrl . '/master/unit', [
                 'company_id' => $companyId
             ]);
 
@@ -74,7 +74,7 @@ class AccountingProxyController extends Controller
         }
 
         Log::info('Getting taxes from accounting API', [
-            'url' => $this->accountingApiUrl . '/taxes',
+            'url' => $this->accountingApiUrl . '/master/taxes',
             'company_id' => $companyId,
             'bearer_token_set' => !empty($this->bearerToken),
             'bearer_token_length' => strlen($this->bearerToken ?? '')
@@ -84,7 +84,7 @@ class AccountingProxyController extends Controller
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->bearerToken,
                 'Accept' => 'application/json',
-            ])->get($this->accountingApiUrl . '/taxes', [
+            ])->get($this->accountingApiUrl . '/master/taxes', [
                 'company_id' => $companyId
             ]);
 
@@ -118,7 +118,7 @@ class AccountingProxyController extends Controller
         }
 
         Log::info('Getting customers from accounting API', [
-            'url' => $this->accountingApiUrl . '/customers',
+            'url' => $this->accountingApiUrl . '/master/customers',
             'company_id' => $companyId,
             'bearer_token_set' => !empty($this->bearerToken),
             'bearer_token_length' => strlen($this->bearerToken ?? '')
@@ -128,7 +128,7 @@ class AccountingProxyController extends Controller
             $response = Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->bearerToken,
                 'Accept' => 'application/json',
-            ])->get($this->accountingApiUrl . '/customers', [
+            ])->get($this->accountingApiUrl . '/master/customers', [
                 'company_id' => $companyId,
                 'search' => $request->query('search')
             ]);
