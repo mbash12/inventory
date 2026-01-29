@@ -39,6 +39,7 @@ const state = reactive({
     total_price: null,
     client_po_number: null,
     client_company: null,
+    client_code: null,
     client_pic_name: null,
     is_po_deposit: false,
     status: "new",
@@ -86,6 +87,7 @@ const submit = () => {
         pic_name: state.pic_name,
         client_po_number: state.client_po_number,
         client_company: state.client_company,
+        client_code: state.client_code,
         client_pic_name: state.client_pic_name,
         status: status,
         products: state.products,
@@ -382,7 +384,7 @@ onMounted(() => {
                                 class="w-full border rounded-lg bg-white h-45px relative flex items-center"
                             >
                                 <Select1
-                                    @select="(e) => (state.client_company = e)"
+                                    @select="(e) => { state.client_company = e.name; state.client_code = e.code; if(e.contact_person) state.client_pic_name = e.contact_person; }"
                                     :value="state.client_company"
                                     required="true"
                                     disabled

@@ -187,4 +187,5 @@ Route::get('/check-db-connection', function () {
 Route::prefix('proxy/accounting')->group(function () {
     Route::get('/unit', [AccountingProxyController::class, 'getUnits']);
     Route::get('/taxes', [AccountingProxyController::class, 'getTaxes']);
+    Route::get('/customers', [AccountingProxyController::class, 'getCustomers']);
 });

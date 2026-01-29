@@ -44,6 +44,7 @@ const state = reactive({
     total_price: null,
     client_po_number: null,
     client_company: null,
+    client_code: null,
     client_pic_name: null,
     is_po_deposit: false,
     status: "new",
@@ -278,6 +279,7 @@ const submit = () => {
         pic_name: state.pic_name,
         client_po_number: state.client_po_number,
         client_company: state.client_company,
+        client_code: state.client_code,
         client_pic_name: state.client_pic_name,
         status: state.status,
         products_group: products.filter(
@@ -365,6 +367,7 @@ onMounted(() => {
                 state.pic_name = data.pic_name;
                 state.client_po_number = data.client_po_number;
                 state.client_company = data.client_company;
+                state.client_code = data.client_code;
                 state.client_pic_name = data.client_pic_name;
                 state.status = data.status;
                 state.title = data.title;
@@ -761,23 +764,10 @@ async function loadUomAndTaxData() {
                             class="w-full border rounded-lg bg-white h-45px relative flex items-center"
                         >
                             <Select1
-                                @select="(e) => (state.client_company = e)"
+                                @select="(e) => { state.client_company = e.name; state.client_code = e.code; if(e.contact_person) state.client_pic_name = e.contact_person; }"
                                 :value="state.client_company"
                                 required="true"
                             />
-                            <!-- <select
-                                v-model="state.client_company"
-                                required
-                                class="bg-transparent w-full h-full rounded-lg pl-45px text-14px"
-                            >
-                                <option
-                                    v-for="option in state.clients"
-                                    :value="option.name"
-                                    :key="option.id"
-                                >
-                                    {{ option.name }}
-                                </option>
-                            </select> -->
                             <div class="absolute left-4 text-red-500 text-xl">
                                 <i class="ri-hotel-line"></i>
                             </div>

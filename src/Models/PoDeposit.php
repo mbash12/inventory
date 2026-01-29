@@ -22,6 +22,7 @@ class PoDeposit extends Model
         'client_po_date',
         'client_po_number',
         'client_company',
+        'client_code',
         'client_pic_name',
         'pic_name',
         'status',

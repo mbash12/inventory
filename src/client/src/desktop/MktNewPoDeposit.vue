@@ -7,7 +7,6 @@ import {
     createPodeposit,
     updatePodeposit,
     currentUser,
-    getClientList,
     nom,
     getPodeposit,
     goto,
@@ -47,6 +46,7 @@ const state = reactive({
     closed_at: null,
     client_po_number: null,
     client_company: null,
+    client_code: null,
     client_pic_name: null,
     budget: null,
     expense: null,
@@ -185,6 +185,7 @@ const submit = () => {
         pic_name: state.pic_name,
         client_po_number: state.client_po_number,
         client_company: state.client_company,
+        client_code: state.client_code,
         client_pic_name: state.client_pic_name,
         status: state.status,
         budget: state.budget ?? 0,
@@ -239,11 +240,6 @@ async function loadUomAndTaxData() {
 
 const init = () => {
     loading();
-    getClientList().then((r) => {
-        if (r.code === 200) {
-            state.clients = r.data;
-        }
-    });
 
     // Load UOM and Tax data from accounting API
     loadUomAndTaxData();
@@ -265,6 +261,7 @@ const init = () => {
                 state.pic_name = data.pic_name;
                 state.client_po_number = data.client_po_number;
                 state.client_company = data.client_company;
+                state.client_code = data.client_code;
                 state.client_pic_name = data.client_pic_name;
                 state.status = data.status;
                 if (data.closed_at) {
@@ -657,7 +654,7 @@ watch(
                                 class="w-full border rounded-lg bg-white h-45px relative flex items-center"
                             >
                                 <Select1
-                                    @select="(e) => (state.client_company = e)"
+                                    @select="(e) => { state.client_company = e.name; state.client_code = e.code; if(e.contact_person) state.client_pic_name = e.contact_person; }"
                                     :value="state.client_company"
                                     required="true"
                                 />
@@ -819,7 +816,7 @@ watch(
                                         <thead class="bg-gray-100">
                                             <tr>
                                                 <td
-                                                    colspan="7"
+                                                    colspan="8"
                                                     class="bg-gray-50 border-b-2 pt-2"
                                                 >
                                                     <table

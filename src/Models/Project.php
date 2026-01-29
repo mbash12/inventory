@@ -27,6 +27,7 @@ class Project extends Model
         'manufacture',
         'pic_name',
         'client_company',
+        'client_code',
         'po_deposit',
         'is_po_deposit',
         'deposit',

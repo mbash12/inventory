@@ -204,6 +204,29 @@ export const getTaxList = async (companyId = DEFAULT_COMPANY_ID) => {
     return response.json();
 };
 
+// API function for getting Customer/Contact list from accounting app
+export const getCustomerList = async (search = null, companyId = DEFAULT_COMPANY_ID) => {
+    const headers = {
+        "Content-Type": "application/json",
+    };
+
+    // Add authorization header if user is logged in (same as other API calls)
+    if (currentUser.user && currentUser.user.token) {
+        headers["Authorization"] = `Bearer ${currentUser.user.token}`;
+    }
+
+    let url = `${APIURL}/proxy/accounting/customers?company_id=${companyId}`;
+    if (search) {
+        url += `&search=${encodeURIComponent(search)}`;
+    }
+
+    const response = await fetch(url, {
+        method: 'GET',
+        headers: headers
+    });
+    return response.json();
+};
+
 
 export const sortByProperty = (arr, property, direction = 'asc') =>
 [...arr].sort((a, b) => {

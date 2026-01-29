@@ -41,6 +41,7 @@ const state = reactive({
     closed_at: null,
     client_po_number: null,
     client_company: null,
+    client_code: null,
     client_pic_name: null,
     budget: null,
     expense: null,
@@ -285,6 +286,7 @@ const submit = () => {
         pic_name: state.pic_name,
         client_po_number: state.client_po_number,
         client_company: state.client_company,
+        client_code: state.client_code,
         client_pic_name: state.client_pic_name,
         status: state.status,
         budget: state.budget ?? 0,
@@ -362,6 +364,7 @@ const init = () => {
                 state.pic_name = data.pic_name;
                 state.client_po_number = data.client_po_number;
                 state.client_company = data.client_company;
+                state.client_code = data.client_code;
                 state.client_pic_name = data.client_pic_name;
                 state.status = data.status;
                 if (data.closed_at) {
@@ -640,9 +643,11 @@ watch(
                                         >Client Company *</span
                                     >
                                     <Select2
-                                        @select="
-                                            (e) => (state.client_company = e)
-                                        "
+                                        @select="(e) => { 
+                                            state.client_company = e.name; 
+                                            state.client_code = e.code; 
+                                            if(e.contact_person) state.client_pic_name = e.contact_person; 
+                                        }"
                                         :disabled="
                                             (user.position != 'marketing' &&
                                                 user.position != 'admin') ||

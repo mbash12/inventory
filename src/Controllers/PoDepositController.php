@@ -120,6 +120,7 @@ class PoDepositController extends Controller
 
             $project->pic_name = $podeposit->pic_name;
             $project->client_company = $podeposit->client_company;
+            $project->client_code = $podeposit->client_code;
             $project->po_deposit = $podeposit->id;
             $project->is_po_deposit = $is_po_deposit;
             $project->is_real = $real;
@@ -182,6 +183,7 @@ class PoDepositController extends Controller
 
             $project->pic_name = $podeposit->pic_name;
             $project->client_company = $podeposit->client_company;
+            $project->client_code = $podeposit->client_code;
             $project->po_deposit = $podeposit->id;
             $project->is_po_deposit = $is_po_deposit;
             $project->is_real = $real;
@@ -324,6 +326,7 @@ class PoDepositController extends Controller
                 "client_po_date" => $request->client_po_date,
                 "client_po_number" => $request->client_po_number,
                 "client_company" => $request->client_company,
+                "client_code" => $request->client_code ?? null,
                 "client_pic_name" => $request->client_pic_name,
                 "pic_name" => $request->pic_name,
                 "status" => 'open',
@@ -421,6 +424,7 @@ class PoDepositController extends Controller
                 "client_po_date" => $request->client_po_date,
                 "client_po_number" => $request->client_po_number,
                 "client_company" => $request->client_company,
+                "client_code" => $request->client_code ?? null,
                 "client_pic_name" => $request->client_pic_name,
                 "pic_name" => $request->pic_name,
                 "status" => $request->status,

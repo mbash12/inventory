@@ -41,6 +41,7 @@ const state = reactive({
     manual_total_price: false, // Flag to indicate if user wants to manually enter total price
     client_po_number: null,
     client_company: null,
+    client_code: null,
     client_pic_name: null,
     manufacture: null,
     status: "production",
@@ -174,6 +175,7 @@ const submit = () => {
         pic_name: state.pic_name,
         client_po_number: state.client_po_number,
         client_company: state.client_company,
+        client_code: state.client_code,
         client_pic_name: state.client_pic_name,
         status: state.status,
         products: processedProducts,
@@ -239,6 +241,7 @@ onMounted(() => {
                 state.pic_name = data.pic_name;
                 state.client_po_number = data.client_po_number;
                 state.client_company = data.client_company;
+                state.client_code = data.client_code;
                 state.client_pic_name = data.client_pic_name;
                 state.status = data.status;
                 state.title = data.title;
@@ -433,9 +436,11 @@ onMounted(() => {
                                         >Client Company</span
                                     >
                                     <Select2
-                                        @select="
-                                            (e) => (state.client_company = e)
-                                        "
+                                        @select="(e) => { 
+                                            state.client_company = e.name; 
+                                            state.client_code = e.code; 
+                                            if(e.contact_person) state.client_pic_name = e.contact_person; 
+                                        }"
                                         :value="state.client_company"
                                         required="true"
                                     />
