@@ -63,7 +63,7 @@ class InvoiceProgressController extends Controller
             $deposit['invoices'] = json_encode($inv);
             $note = $request->get('note') . "\r\nInvoice : " . $request->get('invoice_number') . " (" . $request->get('invoice_date') . ")";
             
-            $this->notify('Project Invoice Updated', 'Project #' . $proj['job_number'] . ' Invoice #' . $request->get('invoice_number'), 'finance', json_encode(["project" => $proj]));
+            notify('Project Invoice Updated', 'Project #' . $proj['job_number'] . ' Invoice #' . $request->get('invoice_number'), 'finance', json_encode(["project" => $proj]), 'invoice');
         }
         $deposit['invoice_status'] = $request->get('status');
         $deposit->save();

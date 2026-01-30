@@ -53,7 +53,7 @@ class FollowupController extends Controller
                 $deposit['client_po_number'] = $request->get('client_po_number');
                 $deposit['client_po_date'] = $request->get('client_po_date');
 
-                $this->notify('Project PO Updated', 'Project #' . $proj['job_number'] . ' PO #'.$proj['client_po_number'], 'marketing', json_encode(["project" => $proj]));
+                notify('Project PO Updated', 'Project #' . $proj['job_number'] . ' PO #'.$proj['client_po_number'], 'marketing', json_encode(["project" => $proj]), 'followup');
                 $proj->save();
                 $deposit->save();
                 $followup = MarketingFollowup::create([
@@ -105,7 +105,7 @@ class FollowupController extends Controller
             $deposit['client_po_number'] = $request->get('client_po_number');
             $deposit['client_po_date'] = $request->get('client_po_date');
 
-            $this->notify('Project PO Updated', 'Project #' . $proj['job_number'] . ' PO #'.$proj['client_po_number'], 'marketing', json_encode(["project" => $proj]));
+            notify('Project PO Updated', 'Project #' . $proj['job_number'] . ' PO #'.$proj['client_po_number'], 'marketing', json_encode(["project" => $proj]), 'followup');
         }
 
         $proj->save();
