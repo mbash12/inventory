@@ -21,14 +21,26 @@ const emit = defineEmits(['update:modelValue', 'change'])
 const displayValue = ref('')
 
 const formatNumber = (value) => {
-  if (!value) return ''
-  // First clean the input to ensure valid number
-  const cleanNum = value.toString().replace(/[^\d-]/g, '')
-  if (!cleanNum) return ''
+  if (!value && value !== 0) return ''
+  
+  // Handle decimal values from API (e.g., "256.00" should be treated as 256, not 25600)
+  // First convert to number to handle decimal strings, then to string for formatting
+  let numValue
+  if (typeof value === 'string' && value.includes('.')) {
+    // If it's a decimal string like "256.00", parse it as a float first
+    numValue = Math.floor(parseFloat(value))
+  } else {
+    numValue = parseInt(value)
+  }
+  
+  if (isNaN(numValue)) return ''
+  
+  // Convert to string for formatting
+  const numStr = numValue.toString()
   
   // Handle negative numbers
-  const isNegative = cleanNum.startsWith('-')
-  const absNumber = cleanNum.replace('-', '')
+  const isNegative = numStr.startsWith('-')
+  const absNumber = numStr.replace('-', '')
   
   // Add dots for thousand separators
   const formatted = absNumber.replace(/\B(?=(\d{3})+(?!\d))/g, '.')

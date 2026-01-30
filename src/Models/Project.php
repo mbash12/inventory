@@ -87,4 +87,20 @@ class Project extends Model
     {
         return $this->hasMany(Delivery::class, 'project');
     }
+
+    /**
+     * Get the parent deposit project (for actual projects)
+     */
+    public function deposit_project(): BelongsTo
+    {
+        return $this->belongsTo(Project::class, 'deposit_id');
+    }
+
+    /**
+     * Get child actual projects (for deposit projects)
+     */
+    public function actual_projects(): HasMany
+    {
+        return $this->hasMany(Project::class, 'deposit_id');
+    }
 }

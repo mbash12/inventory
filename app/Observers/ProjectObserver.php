@@ -6,9 +6,20 @@ use Src\Models\Project;
 use Src\Jobs\ProjectSyncJob;
 use Src\Services\SyncLockService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class ProjectObserver
 {
+    /**
+     * Cache key prefix for debouncing
+     */
+    private const DEBOUNCE_PREFIX = 'project_sync_debounce:';
+    
+    /**
+     * Debounce time in seconds
+     */
+    private const DEBOUNCE_SECONDS = 30;
+
     /**
      * Handle the Project "updated" event.
      * Trigger resync to accounting when project data changes.
@@ -78,15 +89,30 @@ class ProjectObserver
             return;
         }
 
+        // Check debounce - don't dispatch if a sync was recently triggered for this PoDeposit
+        $cacheKey = self::DEBOUNCE_PREFIX . $poDeposit->id;
+        if (Cache::has($cacheKey)) {
+            Log::debug('ProjectObserver: Skipping sync - debounce active', [
+                'project_id' => $project->id,
+                'po_deposit_id' => $poDeposit->id,
+                'event' => $event,
+            ]);
+            return;
+        }
+
+        // Set debounce cache
+        Cache::put($cacheKey, true, self::DEBOUNCE_SECONDS);
+
         // Mark as needing sync
         $poDeposit->update([
             'sync_status' => 'pending',
             'last_synced_at' => null,
         ]);
 
-        // Dispatch sync job to queue
+        // Dispatch sync job to queue with a small delay to allow batch operations to complete
         $companyId = env('DEFAULT_COMPANY_ID', 12);
-        ProjectSyncJob::dispatch($poDeposit->id, $companyId);
+        ProjectSyncJob::dispatch($poDeposit->id, $companyId)
+            ->delay(now()->addSeconds(5));
 
         Log::info('ProjectObserver: Resync triggered due to project ' . $event, [
             'project_id' => $project->id,

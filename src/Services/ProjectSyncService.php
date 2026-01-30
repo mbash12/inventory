@@ -26,6 +26,8 @@ class ProjectSyncService
      * 
      * For DEPOSIT (is_po_deposit = true):
      * - Each project becomes a SEPARATE Sales Order (split)
+     * - Non-actual projects (is_real = false) are synced with order_type = 'deposit'
+     * - Actual projects (is_real = true) are synced with order_type = 'aktual'
      * 
      * @param int|null $poDepositId Sync specific PO Deposit (null for all)
      * @param int|null $companyId Target company ID in accounting system
@@ -136,22 +138,23 @@ class ProjectSyncService
     {
         // Check if this is a deposit or non-deposit
         if ($poDeposit->is_po_deposit) {
-            // DEPOSIT: Only sync non-actual projects (is_real = false), one-to-one SO
-            $nonActualProjects = $poDeposit->projects_data->where('is_real', false);
+            // DEPOSIT: Sync ALL projects (both actual and non-actual), one-to-one SO
+            $allProjects = $poDeposit->projects_data;
             
             Log::info('Checking deposit projects', [
                 'po_deposit_id' => $poDeposit->id,
                 'total_projects' => $poDeposit->projects_data->count(),
-                'non_actual_count' => $nonActualProjects->count(),
+                'actual_count' => $poDeposit->projects_data->where('is_real', true)->count(),
+                'non_actual_count' => $poDeposit->projects_data->where('is_real', false)->count(),
                 'projects' => $poDeposit->projects_data->map(fn($p) => ['id' => $p->id, 'is_real' => $p->is_real])->toArray()
             ]);
             
-            if ($nonActualProjects->isEmpty()) {
-                Log::info('Skipping deposit - no non-actual projects', ['po_deposit_id' => $poDeposit->id]);
+            if ($allProjects->isEmpty()) {
+                Log::info('Skipping deposit - no projects', ['po_deposit_id' => $poDeposit->id]);
                 return [];
             }
             
-            return $this->syncDepositProjects($poDeposit, $nonActualProjects, $companyId);
+            return $this->syncDepositProjects($poDeposit, $allProjects, $companyId);
         } else {
             // NON-DEPOSIT: Sync all real projects, grouped into single SO
             $realProjects = $poDeposit->projects_data->where('is_real', true);
@@ -212,6 +215,7 @@ class ProjectSyncService
             'order_type' => 'sales_order',
             'date' => $poDeposit->client_po_date?->format('Y-m-d') ?? now()->format('Y-m-d'),
             'reference_no' => $poDeposit->client_po_number,
+            'client_po_number' => $poDeposit->client_po_number,
             'description' => 'Synced from Inventory - Job: ' . $poDeposit->job_number,
             'subtotal' => $subtotal,
             'tax_amount' => $totalTax,
@@ -245,48 +249,57 @@ class ProjectSyncService
 
     /**
      * Sync DEPOSIT projects: Each project becomes SEPARATE Sales Order
+     * 
+     * Flow:
+     * 1. First sync NON-ACTUAL projects (deposit SOs)
+     * 2. Then sync ACTUAL projects with reference to their parent deposit SO
      */
     private function syncDepositProjects(PoDeposit $poDeposit, $projects, ?int $companyId): array
     {
         $syncedOrders = [];
+        
+        // Store non-actual SO references for linking with actual SOs
+        // Key: project_id, Value: ['sales_order_id', 'sales_order_number', 'job_number']
+        $nonActualSoMap = [];
 
-        foreach ($projects as $index => $project) {
-            $items = [];
-            $subtotal = 0;
-            $totalTax = 0;
+        // Separate projects by type
+        $nonActualProjects = $projects->where('is_real', false)->values();
+        $actualProjects = $projects->where('is_real', true)->values();
 
-            foreach ($project->products_data as $product) {
-                $itemTotal = ($product->quantity ?? 0) * ($product->price ?? 0);
-                $taxAmount = $this->calculateTax($product);
-                
-                $items[] = [
-                    'quantity' => $product->quantity ?? 0,
-                    'unit_price' => $product->price ?? 0,
-                    'total' => $itemTotal,
-                    'description' => $product->name . ($product->description ? ' - ' . $product->description : ''),
-                    'discount' => 0,
-                    'discount_percentage' => 0,
-                    'tax_amount' => $taxAmount,
-                    'product_id' => null,
-                    'product_name' => $product->name,
-                    'unit_id' => null,
-                    'uom_code' => $product->uom_code,
-                    'tax_id' => null,
-                    'tax_code' => $product->tax_code,
-                    'source_project_id' => $project->id,
-                    'source_product_id' => $product->id,
-                    'project_type' => $project->project_type, // For product category mapping
-                ];
+        // Log actual projects' deposit_id for debugging
+        foreach ($actualProjects as $project) {
+            Log::info('Actual project deposit_id check', [
+                'project_id' => $project->id,
+                'job_number' => $project->job_number,
+                'deposit_id' => $project->deposit_id,
+                'client_po_number' => $project->client_po_number,
+            ]);
+        }
 
-                $subtotal += $itemTotal;
-                $totalTax += $taxAmount;
-            }
+        Log::info('Syncing deposit projects - phase separation', [
+            'po_deposit_id' => $poDeposit->id,
+            'non_actual_count' => $nonActualProjects->count(),
+            'actual_count' => $actualProjects->count(),
+            'non_actual_project_ids' => $nonActualProjects->pluck('id')->toArray(),
+            'actual_project_ids' => $actualProjects->pluck('id')->toArray(),
+            'actual_deposit_ids' => $actualProjects->pluck('deposit_id')->toArray(),
+        ]);
 
+        // ========== PHASE 1: Sync NON-ACTUAL projects (deposit SOs) FIRST ==========
+        foreach ($nonActualProjects as $index => $project) {
+            $items = $this->buildProjectItems($project);
+            
             if (empty($items)) {
+                Log::warning('Skipping non-actual project - no items', [
+                    'project_id' => $project->id,
+                    'job_number' => $project->job_number,
+                ]);
                 continue;
             }
 
-            // For deposits, append index to make order number unique
+            $totals = $this->calculateProjectTotals($items);
+            
+            // Non-actual projects use 'deposit' type and -D prefix
             $orderNumber = $poDeposit->job_number . '-D' . ($index + 1);
 
             $salesOrderData = [
@@ -294,10 +307,11 @@ class ProjectSyncService
                 'order_type' => 'deposit',
                 'date' => $project->client_po_date?->format('Y-m-d') ?? $poDeposit->client_po_date?->format('Y-m-d') ?? now()->format('Y-m-d'),
                 'reference_no' => $project->client_po_number ?? $poDeposit->client_po_number,
+                'client_po_number' => $project->client_po_number ?? $poDeposit->client_po_number,
                 'description' => 'Synced from Inventory - Project: ' . $project->job_number . ' (Deposit)',
-                'subtotal' => $subtotal,
-                'tax_amount' => $totalTax,
-                'total_amount' => $subtotal + $totalTax,
+                'subtotal' => $totals['subtotal'],
+                'tax_amount' => $totals['totalTax'],
+                'total_amount' => $totals['subtotal'] + $totals['totalTax'],
                 'discount' => 0,
                 'discount_percentage' => 0,
                 'other_charges' => 0,
@@ -309,18 +323,150 @@ class ProjectSyncService
                 'items' => $items,
                 'is_grouped' => false,
                 'source_po_deposit_id' => $poDeposit->id,
+                'source_project_id' => $project->id,
+                'is_actual' => false,
             ];
 
             $response = $this->sendToAccounting($salesOrderData);
 
+            // Store the SO info for linking with actual projects
+            $soInfo = [
+                'sales_order_id' => $response['data']['sales_order_id'] ?? null,
+                'sales_order_number' => $response['data']['order_number'] ?? $orderNumber,
+                'external_order_number' => $orderNumber,
+                'job_number' => $project->job_number,
+                'project_id' => $project->id,
+            ];
+            $nonActualSoMap[$project->id] = $soInfo;
+
             $syncedOrders[] = [
                 'sales_order_number' => $orderNumber,
+                'accounting_so_number' => $response['data']['order_number'] ?? null,
+                'accounting_so_id' => $response['data']['sales_order_id'] ?? null,
                 'project_id' => $project->id,
                 'project_job_number' => $project->job_number,
+                'is_actual' => false,
+                'order_type' => 'deposit',
                 'item_count' => count($items),
                 'total_amount' => $salesOrderData['total_amount'],
                 'accounting_response' => $response,
+                'linked_actual_projects' => [], // Will be populated later
             ];
+
+            Log::info('Non-actual project synced (deposit SO)', [
+                'project_id' => $project->id,
+                'job_number' => $project->job_number,
+                'order_number' => $orderNumber,
+                'accounting_so_id' => $soInfo['sales_order_id'],
+            ]);
+        }
+
+        // ========== PHASE 2: Sync ACTUAL projects with parent SO reference ==========
+        foreach ($actualProjects as $index => $project) {
+            $items = $this->buildProjectItems($project);
+            
+            if (empty($items)) {
+                Log::warning('Skipping actual project - no items', [
+                    'project_id' => $project->id,
+                    'job_number' => $project->job_number,
+                ]);
+                continue;
+            }
+
+            $totals = $this->calculateProjectTotals($items);
+            
+            // Actual projects use 'aktual' type and -A prefix
+            $orderNumber = $poDeposit->job_number . '-A' . ($index + 1);
+
+            // Find parent deposit SO if deposit_id is set
+            $parentSoInfo = null;
+            $parentDepositProjectId = $project->deposit_id;
+            
+            if ($parentDepositProjectId && isset($nonActualSoMap[$parentDepositProjectId])) {
+                $parentSoInfo = $nonActualSoMap[$parentDepositProjectId];
+                Log::info('Found parent deposit SO for actual project', [
+                    'actual_project_id' => $project->id,
+                    'parent_deposit_project_id' => $parentDepositProjectId,
+                    'parent_so_id' => $parentSoInfo['sales_order_id'],
+                    'parent_so_number' => $parentSoInfo['sales_order_number'],
+                ]);
+            } else {
+                Log::warning('No parent deposit SO found for actual project', [
+                    'actual_project_id' => $project->id,
+                    'deposit_id' => $parentDepositProjectId,
+                    'available_deposit_projects' => array_keys($nonActualSoMap),
+                ]);
+            }
+
+            $salesOrderData = [
+                'order_number' => $orderNumber,
+                'order_type' => 'aktual',
+                'date' => $project->client_po_date?->format('Y-m-d') ?? $poDeposit->client_po_date?->format('Y-m-d') ?? now()->format('Y-m-d'),
+                'reference_no' => $project->client_po_number ?? $poDeposit->client_po_number,
+                'client_po_number' => $project->client_po_number ?? $poDeposit->client_po_number,
+                'description' => 'Synced from Inventory - Project: ' . $project->job_number . ' (Actual)',
+                'subtotal' => $totals['subtotal'],
+                'tax_amount' => $totals['totalTax'],
+                'total_amount' => $totals['subtotal'] + $totals['totalTax'],
+                'discount' => 0,
+                'discount_percentage' => 0,
+                'other_charges' => 0,
+                'status' => 'open',
+                'job_number' => $project->job_number,
+                'customer_name' => $poDeposit->client_company,
+                'customer_code' => $poDeposit->client_code,
+                'company_id' => $companyId,
+                'items' => $items,
+                'is_grouped' => false,
+                'source_po_deposit_id' => $poDeposit->id,
+                'source_project_id' => $project->id,
+                'is_actual' => true,
+                // Link to parent deposit SO
+                'parent_deposit_so_id' => $parentSoInfo['sales_order_id'] ?? null,
+                'parent_deposit_so_number' => $parentSoInfo['sales_order_number'] ?? null,
+                'parent_deposit_project_id' => $parentDepositProjectId,
+            ];
+
+            $response = $this->sendToAccounting($salesOrderData);
+
+            $syncedOrder = [
+                'sales_order_number' => $orderNumber,
+                'accounting_so_number' => $response['data']['order_number'] ?? null,
+                'accounting_so_id' => $response['data']['sales_order_id'] ?? null,
+                'project_id' => $project->id,
+                'project_job_number' => $project->job_number,
+                'is_actual' => true,
+                'order_type' => 'aktual',
+                'item_count' => count($items),
+                'total_amount' => $salesOrderData['total_amount'],
+                'accounting_response' => $response,
+                'parent_deposit_so' => $parentSoInfo,
+            ];
+
+            // Update the parent deposit SO to track this linked actual project
+            if ($parentDepositProjectId && isset($nonActualSoMap[$parentDepositProjectId])) {
+                foreach ($syncedOrders as &$order) {
+                    if ($order['project_id'] == $parentDepositProjectId) {
+                        $order['linked_actual_projects'][] = [
+                            'project_id' => $project->id,
+                            'job_number' => $project->job_number,
+                            'so_number' => $orderNumber,
+                            'accounting_so_id' => $response['data']['sales_order_id'] ?? null,
+                        ];
+                        break;
+                    }
+                }
+            }
+
+            $syncedOrders[] = $syncedOrder;
+
+            Log::info('Actual project synced (aktual SO)', [
+                'project_id' => $project->id,
+                'job_number' => $project->job_number,
+                'order_number' => $orderNumber,
+                'accounting_so_id' => $response['data']['sales_order_id'] ?? null,
+                'parent_deposit_so_id' => $parentSoInfo['sales_order_id'] ?? null,
+            ]);
         }
 
         return [
@@ -329,6 +475,62 @@ class ProjectSyncService
             'job_number' => $poDeposit->job_number,
             'orders' => $syncedOrders,
             'order_count' => count($syncedOrders),
+            'non_actual_orders' => count($nonActualProjects),
+            'actual_orders' => count($actualProjects),
+            'non_actual_so_map' => $nonActualSoMap,
+        ];
+    }
+
+    /**
+     * Build items array for a project
+     */
+    private function buildProjectItems($project): array
+    {
+        $items = [];
+
+        foreach ($project->products_data as $product) {
+            $itemTotal = ($product->quantity ?? 0) * ($product->price ?? 0);
+            $taxAmount = $this->calculateTax($product);
+            
+            $items[] = [
+                'quantity' => $product->quantity ?? 0,
+                'unit_price' => $product->price ?? 0,
+                'total' => $itemTotal,
+                'description' => $product->name . ($product->description ? ' - ' . $product->description : ''),
+                'discount' => 0,
+                'discount_percentage' => 0,
+                'tax_amount' => $taxAmount,
+                'product_id' => null,
+                'product_name' => $product->name,
+                'unit_id' => null,
+                'uom_code' => $product->uom_code,
+                'tax_id' => null,
+                'tax_code' => $product->tax_code,
+                'source_project_id' => $project->id,
+                'source_product_id' => $product->id,
+                'project_type' => $project->project_type,
+            ];
+        }
+
+        return $items;
+    }
+
+    /**
+     * Calculate totals for project items
+     */
+    private function calculateProjectTotals(array $items): array
+    {
+        $subtotal = 0;
+        $totalTax = 0;
+
+        foreach ($items as $item) {
+            $subtotal += $item['total'];
+            $totalTax += $item['tax_amount'];
+        }
+
+        return [
+            'subtotal' => $subtotal,
+            'totalTax' => $totalTax,
         ];
     }
 
@@ -356,6 +558,9 @@ class ProjectSyncService
             'url' => $url,
             'order_number' => $salesOrderData['order_number'],
             'company_id' => $salesOrderData['company_id'] ?? 'NULL',
+            'client_po_number' => $salesOrderData['client_po_number'] ?? 'NULL',
+            'reference_no' => $salesOrderData['reference_no'] ?? 'NULL',
+            'full_data_keys' => array_keys($salesOrderData),
         ]);
 
         try {
@@ -395,9 +600,9 @@ class ProjectSyncService
             'deposits' => []
         ];
 
-        $query = PoDeposit::with(['projects_data' => function($q) {
-            $q->where('is_real', true);
-        }, 'projects_data.products_data']);
+        // For deposits: load ALL projects (both actual and non-actual)
+        // For non-deposits: load only real projects
+        $query = PoDeposit::with(['projects_data', 'projects_data.products_data']);
 
         if ($poDepositId) {
             $query->where('id', $poDepositId);
@@ -406,49 +611,97 @@ class ProjectSyncService
         $poDeposits = $query->get();
 
         foreach ($poDeposits as $poDeposit) {
-            $realProjects = $poDeposit->projects_data->where('is_real', true);
-            
-            if ($realProjects->isEmpty()) {
-                continue;
-            }
-
-            $totalItems = 0;
-            $totalAmount = 0;
-
-            foreach ($realProjects as $project) {
-                $projectItems = $project->products_data->count();
-                $projectAmount = $project->products_data->sum(function($p) {
-                    return ($p->quantity ?? 0) * ($p->price ?? 0);
-                });
-                $totalItems += $projectItems;
-                $totalAmount += $projectAmount;
-            }
-
-            $data = [
-                'po_deposit_id' => $poDeposit->id,
-                'job_number' => $poDeposit->job_number,
-                'client_company' => $poDeposit->client_company,
-                'client_po_number' => $poDeposit->client_po_number,
-                'project_count' => $realProjects->count(),
-                'total_items' => $totalItems,
-                'total_amount' => $totalAmount,
-                'projects' => $realProjects->map(function($p) {
-                    return [
-                        'id' => $p->id,
-                        'job_number' => $p->job_number,
-                        'title' => $p->title,
-                        'total_price' => $p->total_price,
-                        'item_count' => $p->products_data->count(),
-                    ];
-                })->toArray()
-            ];
-
             if ($poDeposit->is_po_deposit) {
-                // Deposit: will be split
-                $data['sales_orders_count'] = $realProjects->count();
+                // DEPOSIT: Include ALL projects (both actual and non-actual)
+                $allProjects = $poDeposit->projects_data;
+                
+                if ($allProjects->isEmpty()) {
+                    continue;
+                }
+
+                $totalItems = 0;
+                $totalAmount = 0;
+
+                foreach ($allProjects as $project) {
+                    $projectItems = $project->products_data->count();
+                    $projectAmount = $project->products_data->sum(function($p) {
+                        return ($p->quantity ?? 0) * ($p->price ?? 0);
+                    });
+                    $totalItems += $projectItems;
+                    $totalAmount += $projectAmount;
+                }
+
+                $actualCount = $allProjects->where('is_real', true)->count();
+                $nonActualCount = $allProjects->where('is_real', false)->count();
+
+                $data = [
+                    'po_deposit_id' => $poDeposit->id,
+                    'job_number' => $poDeposit->job_number,
+                    'client_company' => $poDeposit->client_company,
+                    'client_po_number' => $poDeposit->client_po_number,
+                    'project_count' => $allProjects->count(),
+                    'actual_count' => $actualCount,
+                    'non_actual_count' => $nonActualCount,
+                    'total_items' => $totalItems,
+                    'total_amount' => $totalAmount,
+                    'projects' => $allProjects->map(function($p) {
+                        return [
+                            'id' => $p->id,
+                            'job_number' => $p->job_number,
+                            'title' => $p->title,
+                            'total_price' => $p->total_price,
+                            'item_count' => $p->products_data->count(),
+                            'is_actual' => $p->is_real,
+                            'type' => $p->is_real ? 'actual' : 'deposit',
+                        ];
+                    })->toArray()
+                ];
+
+                // Deposit: will be split (each project = 1 SO)
+                $data['sales_orders_count'] = $allProjects->count();
                 $data['grouping'] = 'split (each project = 1 SO)';
+                $data['actual_orders'] = $actualCount;
+                $data['non_actual_orders'] = $nonActualCount;
                 $preview['deposits'][] = $data;
             } else {
+                // NON-DEPOSIT: Include only real projects, grouped into single SO
+                $realProjects = $poDeposit->projects_data->where('is_real', true);
+                
+                if ($realProjects->isEmpty()) {
+                    continue;
+                }
+
+                $totalItems = 0;
+                $totalAmount = 0;
+
+                foreach ($realProjects as $project) {
+                    $projectItems = $project->products_data->count();
+                    $projectAmount = $project->products_data->sum(function($p) {
+                        return ($p->quantity ?? 0) * ($p->price ?? 0);
+                    });
+                    $totalItems += $projectItems;
+                    $totalAmount += $projectAmount;
+                }
+
+                $data = [
+                    'po_deposit_id' => $poDeposit->id,
+                    'job_number' => $poDeposit->job_number,
+                    'client_company' => $poDeposit->client_company,
+                    'client_po_number' => $poDeposit->client_po_number,
+                    'project_count' => $realProjects->count(),
+                    'total_items' => $totalItems,
+                    'total_amount' => $totalAmount,
+                    'projects' => $realProjects->map(function($p) {
+                        return [
+                            'id' => $p->id,
+                            'job_number' => $p->job_number,
+                            'title' => $p->title,
+                            'total_price' => $p->total_price,
+                            'item_count' => $p->products_data->count(),
+                        ];
+                    })->toArray()
+                ];
+
                 // Non-deposit: will be grouped
                 $data['sales_orders_count'] = 1;
                 $data['grouping'] = 'grouped (all projects = 1 SO)';

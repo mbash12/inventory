@@ -6,9 +6,20 @@ use Src\Models\Product;
 use Src\Jobs\ProjectSyncJob;
 use Src\Services\SyncLockService;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Cache;
 
 class ProductObserver
 {
+    /**
+     * Cache key prefix for debouncing
+     */
+    private const DEBOUNCE_PREFIX = 'project_sync_debounce:';
+    
+    /**
+     * Debounce time in seconds
+     */
+    private const DEBOUNCE_SECONDS = 30;
+
     /**
      * Handle the Product "updated" event.
      * Trigger resync to accounting when product data changes.
@@ -116,15 +127,31 @@ class ProductObserver
             return;
         }
 
+        // Check debounce - don't dispatch if a sync was recently triggered for this PoDeposit
+        $cacheKey = self::DEBOUNCE_PREFIX . $poDeposit->id;
+        if (Cache::has($cacheKey)) {
+            Log::debug('ProductObserver: Skipping sync - debounce active', [
+                'product_id' => $product->id,
+                'project_id' => $project->id,
+                'po_deposit_id' => $poDeposit->id,
+                'event' => $event,
+            ]);
+            return;
+        }
+
+        // Set debounce cache
+        Cache::put($cacheKey, true, self::DEBOUNCE_SECONDS);
+
         // Mark as needing sync
         $poDeposit->update([
             'sync_status' => 'pending',
             'last_synced_at' => null,
         ]);
 
-        // Dispatch sync job to queue
+        // Dispatch sync job to queue with a small delay to allow batch operations to complete
         $companyId = env('DEFAULT_COMPANY_ID', 12);
-        ProjectSyncJob::dispatch($poDeposit->id, $companyId);
+        ProjectSyncJob::dispatch($poDeposit->id, $companyId)
+            ->delay(now()->addSeconds(5));
 
         Log::info('ProductObserver: Resync triggered due to product ' . $event, [
             'product_id' => $product->id,

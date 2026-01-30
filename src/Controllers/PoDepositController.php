@@ -363,10 +363,16 @@ class PoDepositController extends Controller
                 "invoice_status" => "new"
             ]);
             
+            // For deposits: Create NON-ACTUAL (deposit) projects FIRST
+            // This ensures actual projects can reference them via deposit_id
+            if ($request->is_po_deposit) {
+                $this->createProject($request, $podeposit, false, true);
+            }
+            
+            // Then create ACTUAL projects (they will lookup deposit_id from non-actual projects)
             $this->createProject($request, $podeposit, true, $request->is_po_deposit);
             
             if ($request->is_po_deposit) {
-                $this->createProject($request, $podeposit, false, true);
                 notify('New PO Deposit Created', 'PO Deposit #' . $podeposit['job_number'], 'marketing', json_encode(["po_deposit" => $podeposit]), 'deposit');
             }
 
@@ -459,10 +465,16 @@ class PoDepositController extends Controller
                 "invoice_status" => $request->invoice_status ?? "new"
             ]);
 
+            // For deposits: Update NON-ACTUAL (deposit) projects FIRST
+            // This ensures actual projects can reference them via deposit_id
+            if ($request->is_po_deposit) {
+                $this->updateProject($request, $podeposit, false, true, $request->status);
+            }
+            
+            // Then update ACTUAL projects (they will lookup deposit_id from non-actual projects)
             $this->updateProject($request, $podeposit, true, $request->is_po_deposit, $request->status);
             
             if ($request->is_po_deposit) {
-                $this->updateProject($request, $podeposit, false, true, $request->status);
                 notify('PO Deposit Updated', 'PO Deposit #' . $podeposit['job_number'], 'marketing', json_encode(["po_deposit" => $podeposit]), 'deposit');
             }
             return response()->json(['code' => 200]);
