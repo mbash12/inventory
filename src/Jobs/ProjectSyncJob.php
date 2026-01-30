@@ -25,7 +25,8 @@ class ProjectSyncJob implements ShouldQueue
     {
         $this->poDepositId = $poDepositId;
         $this->companyId = $companyId;
-        $this->onQueue('project-sync');
+        // Use default queue or configure via env
+        $this->onQueue(env('PROJECT_SYNC_QUEUE', 'default'));
     }
 
     public function handle(ProjectSyncService $syncService): void

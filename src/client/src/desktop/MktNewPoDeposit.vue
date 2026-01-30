@@ -1,6 +1,7 @@
 <script setup>
 import dayjs from "dayjs";
 import { onMounted, reactive, ref, watch } from "vue";
+import SelectProduct from "../components/SelectProduct.vue";
 import Swal from 'sweetalert2';
 import {
     getProject,
@@ -81,6 +82,22 @@ const deleteSelectedProduct = () => {
     }
     confirmDelete.value = false;
 };
+// Handle product selection from SelectProduct component
+const onProductSelect = (product, selectedData) => {
+    if (selectedData) {
+        product.name = selectedData.name;
+        product.product_code = selectedData.code;
+        product.price = selectedData.selling_price || 0;
+        product.description = selectedData.description || '';
+        if (selectedData.unit) {
+            product.uom_code = selectedData.unit.code;
+        }
+        if (selectedData.tax) {
+            product.tax_code = selectedData.tax.code;
+        }
+    }
+};
+
 const deleteSelectedGroup = () => {
     if (state.selectedGroup[0] == "deposit") {
         let po = state.po_deposits[state.selectedGroup[1]].client_po_number;
@@ -353,6 +370,7 @@ const addNewGroup = (po_number) => {
         products: [
             {
                 name: null,
+                product_code: null,
                 quantity: null,
                 description: null,
                 price: null,
@@ -439,6 +457,7 @@ const addNewDeposit = (force = false) => {
         products: [
             {
                 name: null,
+                product_code: null,
                 quantity: null,
                 description: null,
                 price: null,
@@ -1086,18 +1105,11 @@ watch(
                                                     <div
                                                         class="flex items-center flex-col gap-1"
                                                     >
-                                                        <input
-                                                            type="text"
-                                                            class="w-full h-40px px-1 text-sm bg-transparent"
-                                                            placeholder="Product Name"
-                                                            v-model="
-                                                                product.name
-                                                            "
+                                                        <SelectProduct
+                                                            :value="product.name"
+                                                            @select="(data) => onProductSelect(product, data)"
+                                                            :disabled="group.manufacture != null"
                                                             required
-                                                            :disabled="
-                                                                group.manufacture !=
-                                                                null
-                                                            "
                                                         />
                                                         <span
                                                             class="text-xs text-red-500 text-left w-full block pl-4"
@@ -1662,18 +1674,11 @@ watch(
                                                         <div
                                                             class="flex items-center flex-col gap-1"
                                                         >
-                                                            <input
-                                                                type="text"
-                                                                class="w-full h-40px px-1 text-sm bg-transparent"
-                                                                placeholder="Product Name"
-                                                                v-model="
-                                                                    product.name
-                                                                "
+                                                            <SelectProduct
+                                                                :value="product.name"
+                                                                @select="(data) => onProductSelect(product, data)"
+                                                                :disabled="group1.manufacture != null"
                                                                 required
-                                                                :disabled="
-                                                                    group1.manufacture !=
-                                                                    null
-                                                                "
                                                             />
                                                             <span
                                                                 class="text-xs text-red-500 text-left w-full block pl-4"
@@ -2006,6 +2011,7 @@ watch(
                                                                         group1.products.push(
                                                                             {
                                                                                 name: '',
+                                                                                product_code: null,
                                                                                 quantity:
                                                                                     '',
                                                                                 description:

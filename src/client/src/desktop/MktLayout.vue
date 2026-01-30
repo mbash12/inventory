@@ -221,6 +221,13 @@ const menus = [
         ]
     },
     {
+        icon: "ri-refresh-line",
+        title: "Sync Monitoring",
+        activeon: "desktopsync-monitoring",
+        link: "/desktop/sync-monitoring",
+        roles: ["admin", "finance"],
+    },
+    {
         icon: "ri-money-dollar-circle-fill",
         title: "PO Deposit",
         activeon: "desktoppodeposits",

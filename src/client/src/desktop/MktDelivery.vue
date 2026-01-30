@@ -136,9 +136,11 @@ const prepareExport = (mode) => {
         "Pelangi's PIC": e.pic_name,
         Client: e.client_company,
         "Client's PIC": e.client_pic_name,
-        Products: e.products_data
-            .map((ee) => `${ee.name} (${nom(ee.quantity)})`)
-            .join("<br>"),
+        Products: e.products_data && Array.isArray(e.products_data)
+            ? e.products_data
+                .map((ee) => `${ee.name} (${nom(ee.quantity)})`)
+                .join("<br>")
+            : "",
         Stored: nom(e.stored ?? 0),
         Delivered: nom(e.delivered ?? 0),
         Status: status[e.status],
@@ -597,13 +599,13 @@ onMounted(() => {
                                 >
                                     <div
                                         class="w-150px truncate"
-                                        :title="row.products_data[0].name"
+                                        :title="row.products_data && row.products_data[0] ? row.products_data[0].name : ''"
                                     >
-                                        {{ row.products_data[0].name }}
+                                        {{ row.products_data && row.products_data[0] ? row.products_data[0].name : '' }}
                                     </div>
                                     <span
                                         class="text-xs text-gray-400"
-                                        v-if="row.products_data.length > 1"
+                                        v-if="row.products_data && row.products_data.length > 1"
                                     >
                                         +{{ row.products_data.length - 1 }}
                                         other product(s)
@@ -616,7 +618,7 @@ onMounted(() => {
                                     class="flex items-center justify-start p-1"
                                 >
                                     <strong>{{ nom(row.stored ?? 0) }}</strong
-                                    >/{{ nom(row.total) }}
+                                    >/{{ nom(row.total ?? 0) }}
                                 </div>
                             </td>
                             <td class="p-1">
@@ -626,7 +628,7 @@ onMounted(() => {
                                     <strong>{{
                                         nom(row.delivered ?? 0)
                                     }}</strong
-                                    >/{{ nom(row.total) }}
+                                    >/{{ nom(row.total ?? 0) }}
                                 </div>
                             </td>
                             <td class="p-1">

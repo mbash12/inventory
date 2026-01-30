@@ -21,6 +21,7 @@ import { loading } from "../services/router";
 import Confirm from "../components/Confirm.vue";
 import Alert from "../components/Alert.vue";
 import Select1 from "../components/Select1.vue";
+import SelectProduct from "../components/SelectProduct.vue";
 import INumber from "../components/INumber.vue";
 import { computed, watch, nextTick } from "vue";
 const confirmDelete = ref(false);
@@ -48,7 +49,7 @@ const state = reactive({
     client_pic_name: null,
     is_po_deposit: false,
     status: "new",
-    products: [{ name: "", quantity: "", description: "" }],
+    products: [{ name: "", product_code: "", quantity: "", description: "" }],
     tab: 0,
     prd: {
         gimmick: null,
@@ -68,6 +69,24 @@ const state = reactive({
 // Reactive variables for UOM and Tax options
 const uoms = ref([]);
 const taxes = ref([]);
+
+// Handle product selection - autofill price, uom, tax, description
+const onProductSelect = (product, selectedData) => {
+    if (selectedData) {
+        product.name = selectedData.name;
+        product.product_code = selectedData.code;
+        product.price = selectedData.selling_price || 0;
+        product.description = selectedData.description || '';
+        // Autofill UOM if available
+        if (selectedData.unit) {
+            product.uom_code = selectedData.unit.code;
+        }
+        // Autofill Tax if available
+        if (selectedData.tax) {
+            product.tax_code = selectedData.tax.code;
+        }
+    }
+};
 
 // Computed property to calculate total price based on all products
 const calculatedTotalPrice = computed(() => {
@@ -333,16 +352,16 @@ const submit = () => {
 };
 const generateProds = () => {
     state.prd.gimmick = {
-        products: [{ name: "", quantity: "", uom_code: null, tax_code: null, price: "", description: "" }],
+        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, price: "", description: "" }],
     };
     state.prd.design = {
-        products: [{ name: "", quantity: "", uom_code: null, tax_code: null, price: "", description: "" }],
+        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, price: "", description: "" }],
     };
     state.prd.printing = {
-        products: [{ name: "", quantity: "", uom_code: null, tax_code: null, price: "", description: "" }],
+        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, price: "", description: "" }],
     };
     state.prd.payment = {
-        products: [{ name: "", uom_code: null, tax_code: null, price: "", description: "" }],
+        products: [{ name: "", product_code: "", uom_code: null, tax_code: null, price: "", description: "" }],
     };
 };
 onMounted(() => {
@@ -879,7 +898,7 @@ async function loadUomAndTaxData() {
                 </div>
 
                 <div class="border rounded-lg" v-if="state.tab == 0">
-                    <table class="w-full rounded-lg overflow-hidden">
+                    <table class="w-full rounded-lg" style="overflow: visible;">
                         <thead class="bg-gray-100">
                             <tr class="border-b">
                                 <th class="text-left text-sm px-4 py-2 w-1/4">
@@ -917,12 +936,10 @@ async function loadUomAndTaxData() {
                                     <div
                                         class="flex items-center flex-col gap-1"
                                     >
-                                        <input
-                                            type="text"
-                                            class="w-full h-40px px-4 text-sm bg-transparent"
-                                            placeholder="Product Name"
-                                            v-model="product.name"
-                                            required
+                                        <SelectProduct
+                                            @select="(e) => onProductSelect(product, e)"
+                                            :value="product.name"
+                                            required="true"
                                         />
                                         <span
                                             class="text-xs text-red-500 text-left w-full block pl-4"
@@ -1130,6 +1147,7 @@ async function loadUomAndTaxData() {
                                                 state.prd.gimmick.products.push(
                                                     {
                                                         name: '',
+                                                        product_code: '',
                                                         quantity: '',
                                                         uom_code: null,
                                                         tax_code: null,
@@ -1148,7 +1166,7 @@ async function loadUomAndTaxData() {
                     </table>
                 </div>
                 <div class="border rounded-lg" v-if="state.tab == 1">
-                    <table class="w-full rounded-lg overflow-hidden">
+                    <table class="w-full rounded-lg" style="overflow: visible;">
                         <thead class="bg-gray-100">
                             <tr class="border-b">
                                 <th class="text-left text-sm px-4 py-2 w-1/4">
@@ -1187,12 +1205,10 @@ async function loadUomAndTaxData() {
                                     <div
                                         class="flex items-center flex-col gap-1"
                                     >
-                                        <input
-                                            type="text"
-                                            class="w-full h-40px px-4 text-sm bg-transparent"
-                                            placeholder="Item Name"
-                                            v-model="product.name"
-                                            required
+                                        <SelectProduct
+                                            @select="(e) => onProductSelect(product, e)"
+                                            :value="product.name"
+                                            required="true"
                                         />
                                         <span
                                             class="text-xs text-red-500 text-left w-full block pl-4"
@@ -1399,6 +1415,7 @@ async function loadUomAndTaxData() {
                                             () =>
                                                 state.prd.design.products.push({
                                                     name: '',
+                                                    product_code: '',
                                                     quantity: '',
                                                     uom_code: null,
                                                     tax_code: null,
@@ -1416,7 +1433,7 @@ async function loadUomAndTaxData() {
                     </table>
                 </div>
                 <div class="border rounded-lg" v-if="state.tab == 2">
-                    <table class="w-full rounded-lg overflow-hidden">
+                    <table class="w-full rounded-lg" style="overflow: visible;">
                         <thead class="bg-gray-100">
                             <tr class="border-b">
                                 <th class="text-left text-sm px-4 py-2 w-1/4">
@@ -1454,12 +1471,10 @@ async function loadUomAndTaxData() {
                                     <div
                                         class="flex items-center flex-col gap-1"
                                     >
-                                        <input
-                                            type="text"
-                                            class="w-full h-40px px-4 text-sm bg-transparent"
-                                            placeholder="Product Name"
-                                            v-model="product.name"
-                                            required
+                                        <SelectProduct
+                                            @select="(e) => onProductSelect(product, e)"
+                                            :value="product.name"
+                                            required="true"
                                         />
                                         <span
                                             class="text-xs text-red-500 text-left w-full block pl-4"
@@ -1667,6 +1682,7 @@ async function loadUomAndTaxData() {
                                                 state.prd.printing.products.push(
                                                     {
                                                         name: '',
+                                                        product_code: '',
                                                         quantity: '',
                                                         uom_code: null,
                                                         tax_code: null,
@@ -1685,7 +1701,7 @@ async function loadUomAndTaxData() {
                     </table>
                 </div>
                 <div class="border rounded-lg" v-if="state.tab == 3">
-                    <table class="w-full rounded-lg overflow-hidden">
+                    <table class="w-full rounded-lg" style="overflow: visible;">
                         <thead class="bg-gray-100">
                             <tr class="border-b">
                                 <th class="text-left text-sm px-4 py-2 w-1/4">
@@ -1717,12 +1733,10 @@ async function loadUomAndTaxData() {
                                     <div
                                         class="flex items-center flex-col gap-1"
                                     >
-                                        <input
-                                            type="text"
-                                            class="w-full h-40px px-4 text-sm bg-transparent"
-                                            placeholder="e.g. : PT Astra"
-                                            v-model="product.name"
-                                            required
+                                        <SelectProduct
+                                            @select="(e) => onProductSelect(product, e)"
+                                            :value="product.name"
+                                            required="true"
                                         />
                                         <span
                                             class="text-xs text-red-500 text-left w-full block pl-4"
@@ -1891,6 +1905,7 @@ async function loadUomAndTaxData() {
                                                 state.prd.payment.products.push(
                                                     {
                                                         name: '',
+                                                        product_code: '',
                                                         uom_code: null,
                                                         tax_code: null,
                                                         price: '',

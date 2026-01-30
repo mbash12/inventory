@@ -12,8 +12,15 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        // Auto-sync unsynchronized PO Deposits
+        // Process queue jobs (runs every minute, processes all then exits)
+        $schedule->command('queue:work --stop-when-empty --tries=3 --timeout=60')
+            ->everyMinute()
+            ->withoutOverlapping()
+            ->runInBackground();
+
+        // Auto-sync unsynchronized PO Deposits (every 5 minutes)
         $schedule->command('projects:auto-sync --company-id=12')
+            ->everyFiveMinutes()
             ->withoutOverlapping()
             ->onOneServer();
     }

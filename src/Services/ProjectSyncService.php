@@ -195,6 +195,7 @@ class ProjectSyncService
                     'tax_code' => $product->tax_code,
                     'source_project_id' => $project->id,
                     'source_product_id' => $product->id,
+                    'project_type' => $project->project_type, // For product category mapping
                 ];
 
                 $subtotal += $itemTotal;
@@ -274,6 +275,7 @@ class ProjectSyncService
                     'tax_code' => $product->tax_code,
                     'source_project_id' => $project->id,
                     'source_product_id' => $product->id,
+                    'project_type' => $project->project_type, // For product category mapping
                 ];
 
                 $subtotal += $itemTotal;

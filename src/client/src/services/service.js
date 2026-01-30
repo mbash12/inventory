@@ -13,6 +13,9 @@ export const isLoggedin = ref(false);
 export const currentUser = reactive({ user: null });
 export const data = reactive({ notifications: 0 });
 export const nom = (num = "0") => {
+    if (num === null || num === undefined) {
+        num = "0";
+    }
     if (typeof num !== 'string') {
         num = num.toString();
     }
@@ -198,6 +201,24 @@ export const getTaxList = async (companyId = DEFAULT_COMPANY_ID) => {
     }
 
     const response = await fetch(`${APIURL}/proxy/accounting/taxes?company_id=${companyId}`, {
+        method: 'GET',
+        headers: headers
+    });
+    return response.json();
+};
+
+// API function for getting Product list from accounting app
+export const getProductList = async (companyId = DEFAULT_COMPANY_ID) => {
+    const headers = {
+        "Content-Type": "application/json",
+    };
+
+    // Add authorization header if user is logged in (same as other API calls)
+    if (currentUser.user && currentUser.user.token) {
+        headers["Authorization"] = `Bearer ${currentUser.user.token}`;
+    }
+
+    const response = await fetch(`${APIURL}/proxy/accounting/products?company_id=${companyId}`, {
         method: 'GET',
         headers: headers
     });

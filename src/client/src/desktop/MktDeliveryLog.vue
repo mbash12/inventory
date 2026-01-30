@@ -7,6 +7,9 @@ import {
     getInventoriess,
     getLogsList,
     getProject,
+    getDelivery,
+    deleteDelivery,
+    updateDelivery,
     nom,
     goto,
     APIURL,
@@ -29,7 +32,13 @@ const state = reactive({
     export_prod: null,
     export_mode: "print",
     sort_product: false,
-    viewFile: null
+    viewFile: null,
+    manageModal: null,
+    selectedDelivery: null,
+    confirmDelete: null,
+    confirmDeleteItem: null,
+    editingItem: null,
+    editQuantity: 0,
 });
 const prepareExport = (mode) => {
     state.export_mode = mode;
@@ -82,6 +91,166 @@ const prepareExport = (mode) => {
         },
     ];
     state.export = data ?? [];
+};
+
+const openManageModal = (delivery) => {
+    state.selectedDelivery = delivery;
+    state.manageModal = true;
+    // Load delivery details with items
+    loading();
+    getDelivery(delivery.id).then((r) => {
+        loading(false);
+        if (r.code === 200) {
+            state.selectedDelivery = r.data;
+        }
+    });
+};
+
+const closeManageModal = () => {
+    state.manageModal = null;
+    state.selectedDelivery = null;
+    state.editingItem = null;
+    state.editQuantity = 0;
+};
+
+const confirmDeleteDelivery = (delivery) => {
+    state.confirmDelete = delivery;
+};
+
+const cancelDeleteDelivery = () => {
+    state.confirmDelete = null;
+};
+
+const executeDeleteDelivery = async () => {
+    if (!state.confirmDelete) return;
+    loading();
+    const result = await deleteDelivery(state.confirmDelete.id);
+    loading(false);
+    if (result.code === 200) {
+        state.confirmDelete = null;
+        // Refresh data
+        refreshData();
+    } else {
+        alert("Failed to delete delivery. Please try again.");
+    }
+};
+
+const startEditItem = (item) => {
+    state.editingItem = item;
+    state.editQuantity = item.quantity;
+};
+
+const cancelEditItem = () => {
+    state.editingItem = null;
+    state.editQuantity = 0;
+};
+
+const saveEditItem = async () => {
+    if (!state.editingItem || !state.selectedDelivery) return;
+    
+    loading();
+    const updatedItems = state.selectedDelivery.delivery_items_data.map(item => {
+        if (item.id === state.editingItem.id) {
+            return {
+                ...item,
+                quantity: parseInt(state.editQuantity),
+                actual_quantity: parseInt(state.editQuantity),
+            };
+        }
+        return item;
+    });
+
+    const payload = {
+        project: state.selectedDelivery.project,
+        default_origin: state.selectedDelivery.default_origin,
+        destination: state.selectedDelivery.destination,
+        shipping_vendor: state.selectedDelivery.shipping_vendor,
+        delivery_date: state.selectedDelivery.delivery_date,
+        do_number: state.selectedDelivery.do_number,
+        do_files: state.selectedDelivery.do_files,
+        receipt_files: state.selectedDelivery.receipt_files,
+        delivery_items: updatedItems,
+    };
+
+    const result = await updateDelivery(state.selectedDelivery.id, payload);
+    loading(false);
+    
+    if (result.code === 200) {
+        state.editingItem = null;
+        state.editQuantity = 0;
+        // Refresh delivery details
+        getDelivery(state.selectedDelivery.id).then((r) => {
+            if (r.code === 200) {
+                state.selectedDelivery = r.data;
+            }
+        });
+        // Refresh main data
+        refreshData();
+    } else {
+        alert("Failed to update item. Please try again.");
+    }
+};
+
+const confirmDeleteItem = (item) => {
+    state.confirmDeleteItem = item;
+};
+
+const cancelDeleteItem = () => {
+    state.confirmDeleteItem = null;
+};
+
+const executeDeleteItem = async () => {
+    if (!state.confirmDeleteItem || !state.selectedDelivery) return;
+    
+    loading();
+    const updatedItems = state.selectedDelivery.delivery_items_data.filter(
+        item => item.id !== state.confirmDeleteItem.id
+    );
+
+    const payload = {
+        project: state.selectedDelivery.project,
+        default_origin: state.selectedDelivery.default_origin,
+        destination: state.selectedDelivery.destination,
+        shipping_vendor: state.selectedDelivery.shipping_vendor,
+        delivery_date: state.selectedDelivery.delivery_date,
+        do_number: state.selectedDelivery.do_number,
+        do_files: state.selectedDelivery.do_files,
+        receipt_files: state.selectedDelivery.receipt_files,
+        delivery_items: updatedItems,
+    };
+
+    const result = await updateDelivery(state.selectedDelivery.id, payload);
+    loading(false);
+    
+    if (result.code === 200) {
+        state.confirmDeleteItem = null;
+        // Refresh delivery details
+        getDelivery(state.selectedDelivery.id).then((r) => {
+            if (r.code === 200) {
+                state.selectedDelivery = r.data;
+            }
+        });
+        // Refresh main data
+        refreshData();
+    } else {
+        alert("Failed to delete item. Please try again.");
+    }
+};
+
+const refreshData = () => {
+    getLogsList(state.id).then((r) => {
+        if (r.code === 200) {
+            state.data = r.data;
+            state.deliveries = r.dels.map((e) => {
+                e.do_files = JSON.parse(e.do_files ?? '[]');
+                e.receipt_files = JSON.parse(e.receipt_files ?? '[]');
+                if (e.do_file) {
+                    e.do_files.push(e.do_file);
+                }
+                return e;
+            });
+        }
+    });
 };
 
 watch(
@@ -481,6 +650,12 @@ onMounted(() => {
                                     <span class="font-bold leading-4">File Barang Diterima</span>
                                 </div>
                             </th>
+                            <th class="p-1">
+                                <div
+                                    class="rounded flex items-center justify-center py-1 min-h-10 px-1 gap-2 w-full cursor-default group">
+                                    <span class="font-bold leading-4">Actions</span>
+                                </div>
+                            </th>
                         </tr>
                     </thead>
                     <tbody class="text-13px">
@@ -538,6 +713,22 @@ onMounted(() => {
                                         </div>
                                     </div>
 
+                                </div>
+                            </td>
+                            <td class="p-1">
+                                <div class="flex items-center justify-center gap-2 py-1 px-4">
+                                    <button 
+                                        class="text-blue-500 hover:bg-blue-50 px-2 py-1 rounded" 
+                                        title="Manage Items"
+                                        @click="openManageModal(row)">
+                                        <i class="ri-settings-4-line text-lg"></i>
+                                    </button>
+                                    <button 
+                                        class="text-red-500 hover:bg-red-50 px-2 py-1 rounded" 
+                                        title="Delete Delivery"
+                                        @click="confirmDeleteDelivery(row)">
+                                        <i class="ri-delete-bin-line text-lg"></i>
+                                    </button>
                                 </div>
                             </td>
                         </tr>
@@ -651,5 +842,180 @@ onMounted(() => {
         <i class="ri-close-circle-fill text-red-500 text-4xl absolute top-2 w-32px h-32px block flex items-center justify-center right-2 bg-white rounded-full"
             @click="state.viewFile = null"></i>
 
+    </div>
+
+    <!-- Manage Delivery Modal -->
+    <div class="fixed bottom-0 left-0 right-0 top-0 z-50 bg-black/50 flex items-center justify-center p-4" v-if="state.manageModal" @click.self="closeManageModal">
+        <div class="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-90vh overflow-hidden flex flex-col">
+            <div class="px-6 py-4 border-b flex justify-between items-center bg-gray-50">
+                <div>
+                    <h3 class="text-lg font-semibold text-gray-800">Manage Delivery Items</h3>
+                    <p class="text-sm text-gray-500">Surat Jalan: {{ state.selectedDelivery?.do_number }}</p>
+                </div>
+                <button @click="closeManageModal" class="text-gray-400 hover:text-gray-600 text-2xl">
+                    <i class="ri-close-line"></i>
+                </button>
+            </div>
+            
+            <div class="p-6 overflow-y-auto flex-1">
+                <!-- Delivery Info -->
+                <div class="bg-blue-50 p-4 rounded-lg mb-4 text-sm">
+                    <div class="grid grid-cols-2 gap-4">
+                        <div>
+                            <span class="text-gray-500">Origin:</span>
+                            <span class="ml-2 font-medium">{{ state.selectedDelivery?.default_origin_data?.name }}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Destination:</span>
+                            <span class="ml-2 font-medium">{{ state.selectedDelivery?.destination_data?.name }}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Delivery Date:</span>
+                            <span class="ml-2 font-medium">{{ state.selectedDelivery?.delivery_date ? dayjs(state.selectedDelivery.delivery_date).format('DD MMM YYYY') : '-' }}</span>
+                        </div>
+                        <div>
+                            <span class="text-gray-500">Status:</span>
+                            <span class="ml-2 px-2 py-0.5 rounded-full text-xs font-medium text-white"
+                                :class="state.selectedDelivery?.status === 'delivered' ? 'bg-green-500' : 
+                                        state.selectedDelivery?.status === 'partial' ? 'bg-blue-400' : 'bg-yellow-500'">
+                                {{ state.selectedDelivery?.status }}
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Items Table -->
+                <table class="w-full border text-sm">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="text-left p-3 border-b font-medium text-gray-600">Product</th>
+                            <th class="text-left p-3 border-b font-medium text-gray-600">Quantity</th>
+                            <th class="text-left p-3 border-b font-medium text-gray-600">Origin</th>
+                            <th class="text-left p-3 border-b font-medium text-gray-600">Destination</th>
+                            <th class="text-center p-3 border-b font-medium text-gray-600 w-24">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="item in state.selectedDelivery?.delivery_items_data" :key="item.id" class="border-b hover:bg-gray-50">
+                            <td class="p-3">{{ item.product_data?.name }}</td>
+                            <td class="p-3">
+                                <div v-if="state.editingItem?.id === item.id" class="flex items-center gap-2">
+                                    <input 
+                                        type="number" 
+                                        v-model="state.editQuantity"
+                                        class="border rounded px-2 py-1 w-20 text-center"
+                                        min="1"
+                                    />
+                                </div>
+                                <span v-else>{{ nom(item.quantity) }}</span>
+                            </td>
+                            <td class="p-3">{{ item.origin_data?.name }}</td>
+                            <td class="p-3">{{ item.destination_data?.name }}</td>
+                            <td class="p-3">
+                                <div class="flex items-center justify-center gap-1">
+                                    <template v-if="state.editingItem?.id === item.id">
+                                        <button 
+                                            class="text-green-600 hover:bg-green-50 p-1.5 rounded"
+                                            @click="saveEditItem"
+                                            title="Save">
+                                            <i class="ri-check-line"></i>
+                                        </button>
+                                        <button 
+                                            class="text-gray-500 hover:bg-gray-100 p-1.5 rounded"
+                                            @click="cancelEditItem"
+                                            title="Cancel">
+                                            <i class="ri-close-line"></i>
+                                        </button>
+                                    </template>
+                                    <template v-else>
+                                        <button 
+                                            class="text-blue-500 hover:bg-blue-50 p-1.5 rounded"
+                                            @click="startEditItem(item)"
+                                            title="Edit Quantity">
+                                            <i class="ri-edit-line"></i>
+                                        </button>
+                                        <button 
+                                            class="text-red-500 hover:bg-red-50 p-1.5 rounded"
+                                            @click="confirmDeleteItem(item)"
+                                            title="Delete Item">
+                                            <i class="ri-delete-bin-line"></i>
+                                        </button>
+                                    </template>
+                                </div>
+                            </td>
+                        </tr>
+                        <tr v-if="!state.selectedDelivery?.delivery_items_data?.length">
+                            <td colspan="5" class="p-8 text-center text-gray-500">
+                                No items found
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <div class="px-6 py-4 border-t bg-gray-50 flex justify-end gap-2">
+                <button 
+                    class="px-4 py-2 border rounded-lg hover:bg-gray-100 text-gray-700"
+                    @click="closeManageModal">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Delete Delivery Modal -->
+    <div class="fixed bottom-0 left-0 right-0 top-0 z-50 bg-black/50 flex items-center justify-center p-4" v-if="state.confirmDelete" @click.self="cancelDeleteDelivery">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="ri-error-warning-line text-3xl text-red-500"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">Delete Delivery?</h3>
+                <p class="text-gray-600 mb-6">
+                    Are you sure you want to delete Surat Jalan <strong>{{ state.confirmDelete.do_number }}</strong>?<br>
+                    This action cannot be undone.
+                </p>
+                <div class="flex justify-center gap-3">
+                    <button 
+                        class="px-4 py-2 border rounded-lg hover:bg-gray-100 text-gray-700"
+                        @click="cancelDeleteDelivery">
+                        Cancel
+                    </button>
+                    <button 
+                        class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                        @click="executeDeleteDelivery">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirm Delete Item Modal -->
+    <div class="fixed bottom-0 left-0 right-0 top-0 z-50 bg-black/50 flex items-center justify-center p-4" v-if="state.confirmDeleteItem" @click.self="cancelDeleteItem">
+        <div class="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div class="text-center">
+                <div class="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <i class="ri-error-warning-line text-3xl text-red-500"></i>
+                </div>
+                <h3 class="text-lg font-semibold text-gray-800 mb-2">Delete Item?</h3>
+                <p class="text-gray-600 mb-6">
+                    Are you sure you want to delete item <strong>{{ state.confirmDeleteItem.product_data?.name }}</strong>?<br>
+                    This action cannot be undone.
+                </p>
+                <div class="flex justify-center gap-3">
+                    <button 
+                        class="px-4 py-2 border rounded-lg hover:bg-gray-100 text-gray-700"
+                        @click="cancelDeleteItem">
+                        Cancel
+                    </button>
+                    <button 
+                        class="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600"
+                        @click="executeDeleteItem">
+                        Delete
+                    </button>
+                </div>
+            </div>
+        </div>
     </div>
 </template>

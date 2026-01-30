@@ -168,6 +168,13 @@ function getMimeType($extension) {
 
 
 use Src\Controllers\AccountingProxyController;
+use Src\Controllers\InvoiceStatusController;
+
+// Back-sync from Accounting: Receive invoice status updates
+// This endpoint is called by Accounting system when invoice is created or paid
+Route::post('/invoice-status/sync', [InvoiceStatusController::class, 'syncFromAccounting'])
+    ->middleware('internal.api');
+Route::get('/invoice-status/{jobNumber}', [InvoiceStatusController::class, 'getStatus']);
 
 Route::get('/check-db-connection', function () {
     try {
@@ -189,6 +196,7 @@ Route::prefix('proxy/accounting')->group(function () {
     Route::get('/unit', [AccountingProxyController::class, 'getUnits']);
     Route::get('/taxes', [AccountingProxyController::class, 'getTaxes']);
     Route::get('/customers', [AccountingProxyController::class, 'getCustomers']);
+    Route::get('/products', [AccountingProxyController::class, 'getProducts']);
 });
 
 // Project to Sales Order Sync routes
