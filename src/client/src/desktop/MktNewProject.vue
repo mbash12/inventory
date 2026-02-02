@@ -994,6 +994,7 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.uom_code"
+                                            disabled
                                         >
                                             <option value="">Select UOM</option>
                                             <option
@@ -1029,6 +1030,7 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.tax_code"
+                                            disabled
                                         >
                                             <option value="">Select Tax</option>
                                             <option
@@ -1263,6 +1265,7 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.uom_code"
+                                            disabled
                                         >
                                             <option value="">Select UOM</option>
                                             <option
@@ -1298,6 +1301,7 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.tax_code"
+                                            disabled
                                         >
                                             <option value="">Select Tax</option>
                                             <option
@@ -1529,6 +1533,7 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.uom_code"
+                                            disabled
                                         >
                                             <option value="">Select UOM</option>
                                             <option
@@ -1564,6 +1569,7 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.tax_code"
+                                            disabled
                                         >
                                             <option value="">Select Tax</option>
                                             <option
@@ -1792,6 +1798,7 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.uom_code"
+                                            disabled
                                         >
                                             <option value="">Select UOM</option>
                                             <option
@@ -1827,6 +1834,7 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.tax_code"
+                                            disabled
                                         >
                                             <option value="">Select Tax</option>
                                             <option

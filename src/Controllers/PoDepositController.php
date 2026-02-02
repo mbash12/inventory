@@ -248,6 +248,9 @@ class PoDepositController extends Controller
             $query = PoDeposit::query();
             // $query->with('projects_data','projects_data.products_data');
             
+            // Only show PO deposits (not regular projects)
+            $query->where('is_po_deposit', true);
+            
             // Filter by has_client_code
             if ($request->filled('has_client_code')) {
                 $query->whereNotNull('client_code')->where('client_code', '!=', '');

@@ -1,23 +1,37 @@
 <template>
-  <div class="p-6">
-    <div class="mb-6">
-      <h1 class="text-2xl font-bold">Sync Monitoring</h1>
-      <p class="text-gray-600">Monitor PO Deposit sync status to Accounting system</p>
+  <div class="p-4">
+    <div class="mb-4">
+      <h1 class="text-xl font-bold">Sync Monitoring</h1>
+      <p class="text-gray-500 text-sm">Monitor PO Deposit sync status to Accounting system</p>
     </div>
 
     <div class="bg-white rounded-lg shadow">
-      <div class="p-4 border-b flex justify-between items-center">
-        <div class="flex gap-4">
-          <select v-model="filter.sync_status" @change="loadData" class="border rounded px-3 py-2">
+      <div class="p-3 border-b flex justify-between items-center">
+        <div class="flex gap-3">
+          <input
+            type="checkbox"
+            @change="toggleSelectAll"
+            :checked="allSelected"
+            :indeterminate.prop="selectedItems.length > 0 && selectedItems.length < items.length"
+            class="mr-2"
+          />
+          <button
+            @click="bulkRetrySync"
+            :disabled="selectedItems.length === 0 || bulkRetrying"
+            class="bg-orange-500 text-white px-3 py-1.5 rounded hover:bg-orange-600 disabled:opacity-50 text-sm mr-2"
+          >
+            {{ bulkRetrying ? 'Syncing...' : `Bulk Re-sync (${selectedItems.length})` }}
+          </button>
+          <select v-model="filter.sync_status" @change="loadData" class="border rounded px-2 py-1 text-sm">
             <option value="">All Status</option>
             <option value="pending">Pending</option>
             <option value="syncing">Syncing</option>
             <option value="success">Success</option>
             <option value="failed">Failed</option>
           </select>
-          <input v-model="filter.search" @input="debounceSearch" placeholder="Search..." class="border rounded px-3 py-2 w-64" />
+          <input v-model="filter.search" @input="debounceSearch" placeholder="Search..." class="border rounded px-2 py-1 w-48 text-sm" />
         </div>
-        <button @click="loadData" class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">
+        <button @click="loadData" class="bg-blue-500 text-white px-3 py-1.5 rounded hover:bg-blue-600 text-sm">
           Refresh
         </button>
       </div>
@@ -25,50 +39,64 @@
       <table class="w-full">
         <thead class="bg-gray-50">
           <tr>
-            <th class="px-4 py-3 text-left">Job Number</th>
-            <th class="px-4 py-3 text-left">Client</th>
-            <th class="px-4 py-3 text-center">Type</th>
-            <th class="px-4 py-3 text-center">Projects</th>
-            <th class="px-4 py-3 text-center">Status</th>
-            <th class="px-4 py-3 text-center">Last Synced</th>
-            <th class="px-4 py-3 text-center">Retries</th>
-            <th class="px-4 py-3 text-center">Actions</th>
+            <th class="px-3 py-2 text-left text-xs w-10">
+              <input
+                type="checkbox"
+                @change="toggleSelectAll"
+                :checked="allSelected"
+                :indeterminate.prop="selectedItems.length > 0 && selectedItems.length < items.length"
+              />
+            </th>
+            <th class="px-3 py-2 text-left text-xs">Job Number</th>
+            <th class="px-3 py-2 text-left text-xs">Client</th>
+            <th class="px-3 py-2 text-center text-xs">Type</th>
+            <th class="px-3 py-2 text-center text-xs">Projects</th>
+            <th class="px-3 py-2 text-center text-xs">Status</th>
+            <th class="px-3 py-2 text-center text-xs">Last Synced</th>
+            <th class="px-3 py-2 text-center text-xs">Actions</th>
           </tr>
         </thead>
         <tbody>
           <tr v-for="item in items" :key="item.id" class="border-b hover:bg-gray-50">
-            <td class="px-4 py-3">{{ item.job_number }}</td>
-            <td class="px-4 py-3">
-              <div class="font-medium">{{ item.client_company }}</div>
-              <div class="text-sm text-gray-500">{{ item.client_code }}</div>
+            <td class="px-3 py-2 text-sm">
+              <input
+                type="checkbox"
+                :value="item.id"
+                v-model="selectedItems"
+                @change="updateSelectAllState"
+              />
             </td>
-            <td class="px-4 py-3 text-center">
+            <td class="px-3 py-2 text-sm">{{ item.job_number }}</td>
+            <td class="px-3 py-2 text-sm">
+              <div class="font-medium">{{ item.client_company }}</div>
+              <div class="text-xs text-gray-500">{{ item.client_code }}</div>
+            </td>
+            <td class="px-3 py-2 text-center text-sm">
               <span class="px-2 py-1 text-xs rounded" :class="item.is_po_deposit ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800'">
                 {{ item.is_po_deposit ? 'Deposit' : 'Non-Deposit' }}
               </span>
             </td>
-            <td class="px-4 py-3 text-center">{{ item.project_count }}</td>
-            <td class="px-4 py-3 text-center">
+            <td class="px-3 py-2 text-center text-sm">{{ item.project_count }}</td>
+            <td class="px-3 py-2 text-center text-sm">
               <span class="px-2 py-1 text-xs rounded font-medium" :class="getStatusClass(item.sync_status)">
                 {{ item.sync_status || 'Not Synced' }}
               </span>
             </td>
-            <td class="px-4 py-3 text-center text-sm">
+            <td class="px-3 py-2 text-center text-xs">
               {{ item.last_synced_at ? formatDate(item.last_synced_at) : '-' }}
             </td>
-            <td class="px-4 py-3 text-center">{{ item.sync_retry_count }}</td>
-            <td class="px-4 py-3 text-center">
-              <button 
+            <td class="px-3 py-2 text-center text-sm">
+              <button
                 @click="retrySync(item.id)"
                 :disabled="retrying[item.id]"
-                class="bg-orange-500 text-white px-3 py-1 rounded text-sm hover:bg-orange-600 disabled:opacity-50"
+                class="bg-orange-500 text-white px-2 py-1 rounded text-xs hover:bg-orange-600 disabled:opacity-50"
               >
                 {{ retrying[item.id] ? 'Syncing...' : 'Re-sync' }}
               </button>
-              <button 
+              <button
                 v-if="item.sync_error"
                 @click="viewDetails(item.id)"
-                class="ml-2 bg-gray-500 text-white px-3 py-1 rounded text-sm hover:bg-gray-600"
+                class="ml-1 bg-gray-500 text-white px-2 py-1 rounded text-xs hover:bg-gray-600"
               >
                 Details
               </button>
@@ -77,30 +105,30 @@
         </tbody>
       </table>
 
-      <div v-if="loading" class="p-8 text-center text-gray-500">
+      <div v-if="loading" class="p-4 text-center text-gray-500 text-sm">
         Loading...
       </div>
 
-      <div v-if="!loading && items.length === 0" class="p-8 text-center text-gray-500">
+      <div v-if="!loading && items.length === 0" class="p-4 text-center text-gray-500 text-sm">
         No data found
       </div>
 
-      <div v-if="meta.total > 0" class="p-4 border-t flex justify-between items-center">
-        <div class="text-sm text-gray-600">
+      <div v-if="meta.total > 0" class="p-3 border-t flex justify-between items-center">
+        <div class="text-xs text-gray-600">
           Showing {{ items.length }} of {{ meta.total }} items
         </div>
-        <div class="flex gap-2">
-          <button 
-            @click="prevPage" 
+        <div class="flex gap-1">
+          <button
+            @click="prevPage"
             :disabled="meta.current_page === 1"
-            class="px-3 py-1 border rounded disabled:opacity-50"
+            class="px-2 py-1 border rounded disabled:opacity-50 text-xs"
           >
-            Previous
+            Prev
           </button>
-          <button 
-            @click="nextPage" 
+          <button
+            @click="nextPage"
             :disabled="meta.current_page * meta.per_page >= meta.total"
-            class="px-3 py-1 border rounded disabled:opacity-50"
+            class="px-2 py-1 border rounded disabled:opacity-50 text-xs"
           >
             Next
           </button>
@@ -110,10 +138,10 @@
 
     <!-- Error Modal -->
     <div v-if="errorModal.show" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click="errorModal.show = false">
-      <div class="bg-white rounded-lg p-6 max-w-2xl w-full mx-4" @click.stop>
-        <h3 class="text-lg font-bold mb-4">Sync Error Details</h3>
-        <pre class="bg-gray-100 p-4 rounded text-sm overflow-auto max-h-96">{{ errorModal.content }}</pre>
-        <button @click="errorModal.show = false" class="mt-4 bg-gray-500 text-white px-4 py-2 rounded">Close</button>
+      <div class="bg-white rounded-lg p-4 max-w-2xl w-full mx-4" @click.stop>
+        <h3 class="text-base font-bold mb-3">Sync Error Details</h3>
+        <pre class="bg-gray-100 p-3 rounded text-xs overflow-auto max-h-64">{{ errorModal.content }}</pre>
+        <button @click="errorModal.show = false" class="mt-3 bg-gray-500 text-white px-3 py-1 rounded text-sm">Close</button>
       </div>
     </div>
   </div>
@@ -133,7 +161,14 @@ export default {
       retrying: {},
       errorModal: { show: false, content: '' },
       searchTimeout: null,
+      selectedItems: [],
+      bulkRetrying: false,
     };
+  },
+  computed: {
+    allSelected() {
+      return this.items.length > 0 && this.selectedItems.length === this.items.length;
+    }
   },
   mounted() {
     this.loadData();
@@ -155,6 +190,8 @@ export default {
         const data = await api('getSyncPoDeposits', { params });
         this.items = data.data;
         this.meta = data.meta;
+        // Clear selections when data reloads
+        this.selectedItems = [];
       } catch (error) {
         console.error('Failed to load data:', error);
       } finally {
@@ -171,6 +208,33 @@ export default {
         alert('Retry failed: ' + (error.message || 'Unknown error'));
       } finally {
         this.retrying[id] = false;
+      }
+    },
+    async bulkRetrySync() {
+      if (this.selectedItems.length === 0) return;
+
+      if (!confirm(`Are you sure you want to re-sync ${this.selectedItems.length} items?`)) {
+        return;
+      }
+
+      this.bulkRetrying = true;
+      try {
+        // Process each selected item
+        for (const id of this.selectedItems) {
+          try {
+            await api('retrySyncPoDeposit', { route: `/${id}/retry` });
+          } catch (error) {
+            console.error(`Failed to sync item ${id}:`, error);
+          }
+        }
+
+        alert(`Successfully initiated re-sync for ${this.selectedItems.length} items`);
+        this.selectedItems = []; // Clear selections after successful bulk sync
+        await this.loadData();
+      } catch (error) {
+        alert('Bulk sync failed: ' + (error.message || 'Unknown error'));
+      } finally {
+        this.bulkRetrying = false;
       }
     },
     async viewDetails(id) {
@@ -201,6 +265,17 @@ export default {
         this.meta.current_page++;
         this.loadData();
       }
+    },
+    toggleSelectAll() {
+      if (this.allSelected) {
+        this.selectedItems = [];
+      } else {
+        this.selectedItems = this.items.map(item => item.id);
+      }
+    },
+    updateSelectAllState() {
+      // This method is called when individual checkboxes change
+      // It ensures the select-all checkbox state is consistent
     },
     getStatusClass(status) {
       const classes = {
