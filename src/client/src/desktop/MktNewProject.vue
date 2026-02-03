@@ -88,11 +88,26 @@ const onProductSelect = (product, selectedData) => {
     }
 };
 
+// Helper function to calculate price with tax
+const calculatePriceWithTax = (price, taxCode) => {
+    if (!taxCode) return price;
+
+    // Find the tax object by code to get the percentage
+    const taxObj = taxes.value?.find(tax => tax.code === taxCode);
+    if (!taxObj || !taxObj.tax_percentage) return price;
+
+    // Calculate the price including tax
+    const taxPercentage = parseFloat(taxObj.tax_percentage);
+    const total = price + (price * taxPercentage / 100);
+    // Round to 2 decimal places to avoid floating-point precision issues
+    return Math.round(total * 100) / 100;
+};
+
 // Computed property to calculate total price based on all products
 const calculatedTotalPrice = computed(() => {
     let total = 0;
 
-    // Calculate total for gimmick, design, and printing products (quantity * price)
+    // Calculate total for gimmick, design, and printing products (quantity * price with tax)
     const nonPaymentProducts = [
         ...(state.prd.gimmick?.products || []),
         ...(state.prd.design?.products || []),
@@ -101,7 +116,8 @@ const calculatedTotalPrice = computed(() => {
 
     nonPaymentProducts.forEach(product => {
         if (product.name !== "" && product.quantity && product.price) {
-            total += parseInt(product.quantity) * parseInt(product.price);
+            const priceWithTax = calculatePriceWithTax(parseFloat(product.price), product.tax_code);
+            total += parseFloat(product.quantity) * priceWithTax;
         }
     });
 
@@ -109,11 +125,12 @@ const calculatedTotalPrice = computed(() => {
     const paymentProducts = state.prd.payment?.products || [];
     paymentProducts.forEach(product => {
         if (product.name !== "" && product.price) {
-            total += parseInt(product.price);
+            total += parseFloat(product.price);
         }
     });
 
-    return total;
+    // Round to 2 decimal places to avoid floating-point precision issues
+    return Math.round(total * 100) / 100;
 });
 
 // Watcher to update total_price when in auto mode
@@ -166,9 +183,9 @@ const onTotalPriceFocus = async (event) => {
 };
 
 const onTotalPriceBlur = () => {
-    // On blur, validate the input and ensure it's a number
+    // On blur, validate the input and ensure it's a number with 2 decimal places
     if (state.total_price !== null && state.total_price !== undefined && state.total_price !== "") {
-        state.total_price = parseFloat(state.total_price) || 0;
+        state.total_price = Math.round((parseFloat(state.total_price) || 0) * 100) / 100;
     }
 };
 const setDelete = (type, i) => {
@@ -177,24 +194,80 @@ const setDelete = (type, i) => {
     confirmDelete.value = true;
 };
 const submit = () => {
+    // Validate products before submitting
+    const validateProducts = () => {
+        const allProductGroups = [
+            ...(state.prd.gimmick?.products || []),
+            ...(state.prd.design?.products || []),
+            ...(state.prd.printing?.products || []),
+            ...(state.prd.payment?.products || [])
+        ];
+
+        for (const product of allProductGroups) {
+            if (product.name && product.name.trim() !== '') {
+                // For payment products, only price is required
+                if (state.prd.payment?.products?.includes(product)) {
+                    if (!product.price || product.price <= 0) {
+                        alertShowFailed.value = 'Price is required and must be greater than 0 for payment products';
+                        loading(false);
+                        return false;
+                    }
+                } else {
+                    // For other products, quantity, price, UOM, and tax are required
+                    if (!product.quantity || product.quantity <= 0) {
+                        alertShowFailed.value = 'Quantity is required and must be greater than 0 for all products';
+                        loading(false);
+                        return false;
+                    }
+
+                    if (!product.price || product.price <= 0) {
+                        alertShowFailed.value = 'Price is required and must be greater than 0 for all products';
+                        loading(false);
+                        return false;
+                    }
+
+                    if (!product.uom_code) {
+                        alertShowFailed.value = 'UOM is required for all products';
+                        loading(false);
+                        return false;
+                    }
+
+                    if (!product.tax_code) {
+                        alertShowFailed.value = 'Tax is required for all products';
+                        loading(false);
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    };
+
+    if (!validateProducts()) {
+        return;
+    }
+
     loading();
 
     // Calculate total price based on all product subtotals
     const calculateTotalPrice = (products, isPaymentSection = false) => {
-        return products.reduce((sum, product) => {
+        const total = products.reduce((sum, product) => {
             if (product.name !== "") {
                 if (isPaymentSection) {
                     // For payment section, use price directly as the amount
-                    return sum + (product.price ? parseInt(product.price) : 0);
+                    return sum + (product.price ? parseFloat(product.price) : 0);
                 } else {
-                    // For other sections, multiply quantity by price
+                    // For other sections, multiply quantity by price with tax
                     if (product.quantity && product.price) {
-                        return sum + (parseInt(product.quantity) * parseInt(product.price));
+                        const priceWithTax = calculatePriceWithTax(parseFloat(product.price), product.tax_code);
+                        return sum + (parseFloat(product.quantity) * priceWithTax);
                     }
                 }
             }
             return sum;
         }, 0);
+        // Round to 2 decimal places to avoid floating-point precision issues
+        return Math.round(total * 100) / 100;
     };
 
     let i = 1;
@@ -272,16 +345,16 @@ const submit = () => {
     });
 
     // Calculate overall total price
-    const overallTotalPrice = products.reduce((sum, productGroup) => {
+    const overallTotalPrice = Math.round(products.reduce((sum, productGroup) => {
         return sum + (productGroup.total_price || 0);
-    }, 0);
+    }, 0) * 100) / 100;
 
     // Determine the final total price based on whether user chose manual or auto calculation
     let finalTotalPrice;
     if (state.manual_total_price) {
         // Use the manually entered value
         finalTotalPrice = state.total_price !== null && state.total_price !== undefined && state.total_price !== ""
-            ? parseFloat(state.total_price)
+            ? Math.round(parseFloat(state.total_price) * 100) / 100
             : 0;
     } else {
         // Use the calculated value
@@ -404,8 +477,8 @@ onMounted(() => {
                         // For payment products, use price field as the amount (with fallback to quantity for existing data)
                         if (e.project_type === 'payment') {
                             // Check if we have price field (new format) or need to use quantity (old format)
-                            const amountValue = product.price ? parseInt(product.price) :
-                                              product.quantity ? parseInt(product.quantity) : 0;
+                            const amountValue = product.price ? parseFloat(product.price) :
+                                              product.quantity ? parseFloat(product.quantity) : 0;
                             return {
                                 ...product,
                                 // Map ID fields to code fields if they exist
@@ -421,7 +494,7 @@ onMounted(() => {
                                 uom_code: product.uom_code || (product.unit_id ? product.unit_id : null),
                                 tax_code: product.tax_code || (product.tax_id ? product.tax_id : null),
                                 price: product.price || "",
-                                total_price: product.total_price || (product.quantity && product.price ? parseInt(product.quantity) * parseInt(product.price) : 0)
+                                total_price: product.total_price || (product.quantity && product.price ? parseFloat(product.quantity) * calculatePriceWithTax(parseFloat(product.price), product.tax_code) : 0)
                             };
                         }
                     });
@@ -560,6 +633,7 @@ async function loadUomAndTaxData() {
                                 required
                                 class="bg-transparent w-full h-full rounded-lg pl-45px text-14px"
                                 v-model="state.job_number"
+                                :disabled="currentUrl.includes('edit')"
                             />
                             <div class="absolute left-4 text-red-500 text-xl">
                                 <i class="ri-briefcase-line"></i>
@@ -1002,7 +1076,7 @@ async function loadUomAndTaxData() {
                                                 :key="uom.id"
                                                 :value="uom.code"
                                             >
-                                                {{ uom.name }} ({{ uom.code }})
+                                                {{ uom.name }}
                                             </option>
                                         </select>
                                         <span
@@ -1038,7 +1112,7 @@ async function loadUomAndTaxData() {
                                                 :key="tax.id"
                                                 :value="tax.code"
                                             >
-                                                {{ tax.name }} ({{ tax.tax_percentage }}%) ({{ tax.code }})
+                                                {{ tax.name }}
                                             </option>
                                         </select>
                                         <span
@@ -1095,7 +1169,7 @@ async function loadUomAndTaxData() {
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent flex items-center"
                                             placeholder="0"
                                         >
-                                            {{ product.quantity && product.price ? nom(product.quantity * product.price) : '0' }}
+                                            {{ product.quantity && product.price ? nom(Math.round(parseFloat(product.quantity) * calculatePriceWithTax(parseFloat(product.price), product.tax_code) * 100) / 100) : '0' }}
                                         </div>
                                     </div>
                                 </td>
@@ -1273,7 +1347,7 @@ async function loadUomAndTaxData() {
                                                 :key="uom.id"
                                                 :value="uom.code"
                                             >
-                                                {{ uom.name }} ({{ uom.code }})
+                                                {{ uom.name }}
                                             </option>
                                         </select>
                                         <span
@@ -1309,7 +1383,7 @@ async function loadUomAndTaxData() {
                                                 :key="tax.id"
                                                 :value="tax.code"
                                             >
-                                                {{ tax.name }} ({{ tax.tax_percentage }}%) ({{ tax.code }})
+                                                {{ tax.name }}
                                             </option>
                                         </select>
                                         <span
@@ -1366,7 +1440,7 @@ async function loadUomAndTaxData() {
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent flex items-center"
                                             placeholder="0"
                                         >
-                                            {{ product.quantity && product.price ? nom(product.quantity * product.price) : '0' }}
+                                            {{ product.quantity && product.price ? nom(Math.round(parseFloat(product.quantity) * calculatePriceWithTax(parseFloat(product.price), product.tax_code) * 100) / 100) : '0' }}
                                         </div>
                                     </div>
                                 </td>
@@ -1541,7 +1615,7 @@ async function loadUomAndTaxData() {
                                                 :key="uom.id"
                                                 :value="uom.code"
                                             >
-                                                {{ uom.name }} ({{ uom.code }})
+                                                {{ uom.name }}
                                             </option>
                                         </select>
                                         <span
@@ -1577,7 +1651,7 @@ async function loadUomAndTaxData() {
                                                 :key="tax.id"
                                                 :value="tax.code"
                                             >
-                                                {{ tax.name }} ({{ tax.tax_percentage }}%) ({{ tax.code }})
+                                                {{ tax.name }}
                                             </option>
                                         </select>
                                         <span
@@ -1634,7 +1708,7 @@ async function loadUomAndTaxData() {
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent flex items-center"
                                             placeholder="0"
                                         >
-                                            {{ product.quantity && product.price ? nom(product.quantity * product.price) : '0' }}
+                                            {{ product.quantity && product.price ? nom(Math.round(parseFloat(product.quantity) * calculatePriceWithTax(parseFloat(product.price), product.tax_code) * 100) / 100) : '0' }}
                                         </div>
                                     </div>
                                 </td>
@@ -1710,16 +1784,16 @@ async function loadUomAndTaxData() {
                     <table class="w-full rounded-lg" style="overflow: visible;">
                         <thead class="bg-gray-100">
                             <tr class="border-b">
-                                <th class="text-left text-sm px-4 py-2 w-1/4">
+                                <th class="text-left text-sm px-4 py-2 w-1/3">
                                     Supplier Name
                                 </th>
-                                <th class="text-left text-sm px-4 py-2 w-1/4">
+                                <th class="text-left text-sm px-4 py-2 w-1/3">
                                     Account Number
                                 </th>
-                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                <th class="text-left text-sm px-4 py-2 w-160px hidden">
                                     UOM
                                 </th>
-                                <th class="text-left text-sm px-4 py-2 w-160px">
+                                <th class="text-left text-sm px-4 py-2 w-160px hidden">
                                     Tax
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
@@ -1791,7 +1865,7 @@ async function loadUomAndTaxData() {
                                         >
                                     </div>
                                 </td>
-                                <td class="">
+                                <td class="hidden">
                                     <div
                                         class="flex items-center flex-col gap-1"
                                     >
@@ -1806,7 +1880,7 @@ async function loadUomAndTaxData() {
                                                 :key="uom.id"
                                                 :value="uom.code"
                                             >
-                                                {{ uom.name }} ({{ uom.code }})
+                                                {{ uom.name }}
                                             </option>
                                         </select>
                                         <span
@@ -1827,7 +1901,7 @@ async function loadUomAndTaxData() {
                                         >
                                     </div>
                                 </td>
-                                <td class="">
+                                <td class="hidden">
                                     <div
                                         class="flex items-center flex-col gap-1"
                                     >
@@ -1842,7 +1916,7 @@ async function loadUomAndTaxData() {
                                                 :key="tax.id"
                                                 :value="tax.code"
                                             >
-                                                {{ tax.name }} ({{ tax.tax_percentage }}%) ({{ tax.code }})
+                                                {{ tax.name }}
                                             </option>
                                         </select>
                                         <span

@@ -12,14 +12,28 @@ export const ASSETSURL = URLL + "/storage/";
 export const isLoggedin = ref(false);
 export const currentUser = reactive({ user: null });
 export const data = reactive({ notifications: 0 });
-export const nom = (num = "0") => {
+export const nom = (num = "0", decimals = 2) => {
     if (num === null || num === undefined) {
         num = "0";
     }
-    if (typeof num !== 'string') {
-        num = num.toString();
+    
+    // Convert to number first
+    let numericValue = parseFloat(num);
+    if (isNaN(numericValue)) {
+        numericValue = 0;
     }
-    return num.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+    
+    // Format with fixed decimal places
+    const fixedValue = numericValue.toFixed(decimals);
+    
+    // Split into integer and decimal parts
+    const [intPart, decPart] = fixedValue.split('.');
+    
+    // Add thousand separators to integer part
+    const formattedInt = intPart.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
+    
+    // Return with comma as decimal separator (Indonesian format)
+    return `${formattedInt},${decPart}`;
 }
 import router from "./router"
 export const goto = (link) => {

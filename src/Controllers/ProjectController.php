@@ -607,7 +607,7 @@ class ProjectController extends Controller
                 "client_company" => $request->client_company,
                 "client_pic_name" => $request->client_pic_name,
                 "total_price" => $request->total_price,
-                "remaining_amount" => $request->total_price - $item->invoiced_amount,
+                "remaining_amount" => round($request->total_price - $item->invoiced_amount, 2),
                 // "client_pic_phone" => $request->client_pic_phone,
                 // "shipping_vendor" => $request->shipping_vendor,
                 // "manufacture" => $request->manufacture,

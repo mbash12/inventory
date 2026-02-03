@@ -83,6 +83,21 @@ const deleteSelectedProduct = () => {
     confirmDelete.value = false;
 };
 // Handle product selection from SelectProduct component
+// Helper function to calculate price with tax
+const calculatePriceWithTax = (price, taxCode) => {
+    if (!taxCode) return price;
+
+    // Find the tax object by code to get the percentage
+    const taxObj = taxes.value?.find(tax => tax.code === taxCode);
+    if (!taxObj || !taxObj.tax_percentage) return price;
+
+    // Calculate the price including tax
+    const taxPercentage = parseFloat(taxObj.tax_percentage);
+    const total = price + (price * taxPercentage / 100);
+    // Round to 2 decimal places to avoid floating-point precision issues
+    return Math.round(total * 100) / 100;
+};
+
 const onProductSelect = (product, selectedData) => {
     if (selectedData) {
         product.name = selectedData.name;
@@ -110,44 +125,48 @@ const deleteSelectedGroup = () => {
     }
     state.products_group = state.products_group.map((g) => {
         g.products = g.products.map((p) => {
-            p.total_price =
-                p.price != null && p.quantity != null
-                    ? p.price * p.quantity
-                    : null;
+            if (p.price != null && p.quantity != null) {
+                const priceWithTax = calculatePriceWithTax(parseFloat(p.price), p.tax_code);
+                p.total_price = Math.round(parseFloat(p.quantity) * priceWithTax * 100) / 100;
+            } else {
+                p.total_price = null;
+            }
             return p;
         });
-        g.total_price = g.products.reduce(
+        g.total_price = Math.round(g.products.reduce(
             (e, c) => e + (c.total_price || 0),
             0
-        );
+        ) * 100) / 100;
         return g;
     });
 
     state.po_deposits = state.po_deposits.map((g) => {
         g.products = g.products.map((p) => {
-            p.total_price =
-                p.price != null && p.quantity != null
-                    ? p.price * p.quantity
-                    : null;
+            if (p.price != null && p.quantity != null) {
+                const priceWithTax = calculatePriceWithTax(parseFloat(p.price), p.tax_code);
+                p.total_price = Math.round(parseFloat(p.quantity) * priceWithTax * 100) / 100;
+            } else {
+                p.total_price = null;
+            }
             return p;
         });
-        g.total_price = g.products.reduce(
+        g.total_price = Math.round(g.products.reduce(
             (e, c) => e + (c.total_price || 0),
             0
-        );
+        ) * 100) / 100;
         return g;
     });
 
-    state.balance = state.budget - state.expense ?? 0;
-    state.expense = state.products_group.reduce(
+    state.balance = Math.round((state.budget - state.expense) * 100) / 100 ?? 0;
+    state.expense = Math.round(state.products_group.reduce(
         (e, c) => e + (c.total_price || 0),
         0
-    );
-    state.budget = state.po_deposits.reduce(
+    ) * 100) / 100;
+    state.budget = Math.round(state.po_deposits.reduce(
         (e, c) => e + (c.total_price || 0),
         0
-    );
-    state.balance = state.budget - state.expense ?? 0;
+    ) * 100) / 100;
+    state.balance = Math.round((state.budget - state.expense) * 100) / 100 ?? 0;
 
     state.current_po = state.po_deposits.length - 1;
 
@@ -398,10 +417,63 @@ const validateProducts = (products) => {
     );
 };
 
-const switchPO = (e) => {
+const isDepositEmpty = (deposit) => {
+    // Check if deposit has no PO number, PIC, or PO date
+    const hasNoBasicInfo = !deposit.client_po_number && !deposit.client_pic_name && !deposit.client_po_date;
+    // Check if all products are empty (no name, quantity, or price)
+    const hasEmptyProducts = deposit.products.every(p => 
+        !p.name && !p.quantity && !p.price
+    );
+    return hasNoBasicInfo && hasEmptyProducts;
+};
+
+const switchPO = async (e) => {
     const current = state.po_deposits[state.current_po];
+    const newValue = parseInt(e.target.value);
+    
+    // Check if trying to switch to same deposit
+    if (newValue === state.current_po) return;
+    
+    // Check if current deposit is empty
+    if (isDepositEmpty(current)) {
+        const result = await Swal.fire({
+            icon: 'question',
+            title: 'Empty Deposit',
+            text: 'This deposit is empty. What would you like to do?',
+            showCancelButton: false,
+            showDenyButton: true,
+            confirmButtonText: 'Delete',
+            denyButtonText: 'Complete',
+            confirmButtonColor: '#ef4444',
+            denyButtonColor: '#3b82f6',
+        });
+        
+        if (result.isConfirmed) {
+            // Delete the empty deposit
+            state.po_deposits.splice(state.current_po, 1);
+            // Adjust current_po if necessary
+            if (state.current_po >= state.po_deposits.length) {
+                state.current_po = state.po_deposits.length - 1;
+            }
+            // Now switch to the selected deposit
+            if (!isNaN(newValue)) {
+                // Adjust newValue if the deleted index was before it
+                const adjustedNewValue = newValue > state.current_po ? newValue - 1 : newValue;
+                state.current_po = adjustedNewValue;
+            }
+            // Update select value
+            e.target.value = state.current_po;
+        } else {
+            // User chose to complete - stay and reset select
+            e.target.value = state.current_po;
+        }
+        return;
+    }
+    
     // Validate current PO fields
     if (!current.client_po_number || !current.client_pic_name || !current.client_po_date) {
+        // Reset select to current value since validation failed
+        e.target.value = state.current_po;
         Swal.fire({
             icon: 'warning',
             title: 'Warning',
@@ -411,6 +483,8 @@ const switchPO = (e) => {
     }
     // Validate products
     if (!validateProducts(current.products)) {
+        // Reset select to current value since validation failed
+        e.target.value = state.current_po;
         Swal.fire({
             icon: 'warning',
             title: 'Warning',
@@ -418,32 +492,60 @@ const switchPO = (e) => {
         });
         return;
     }
-    const value = parseInt(e.target.value);
-    if (!isNaN(value)) {
-        state.current_po = value;
+    if (!isNaN(newValue)) {
+        state.current_po = newValue;
     }
 };
 
-const addNewDeposit = (force = false) => {
+const addNewDeposit = async (force = false) => {
     if (!force) {
         const current = state.po_deposits[state.current_po];
-        // Validate current PO fields
-        if (!current.client_po_number || !current.client_pic_name || !current.client_po_date) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Warning',
-                text: 'Please fill all required fields (PO Number, PIC, PO Date)'
+        
+        // Check if current deposit is empty
+        if (isDepositEmpty(current)) {
+            const result = await Swal.fire({
+                icon: 'question',
+                title: 'Empty Deposit',
+                text: 'This deposit is empty. What would you like to do?',
+                showCancelButton: false,
+                showDenyButton: true,
+                confirmButtonText: 'Delete',
+                denyButtonText: 'Complete',
+                confirmButtonColor: '#ef4444',
+                denyButtonColor: '#3b82f6',
             });
-            return;
-        }
-        // Validate products
-        if (!validateProducts(current.products)) {
-            Swal.fire({
-                icon: 'warning',
-                title: 'Warning',
-                text: 'Please fill all required product fields'
-            });
-            return;
+            
+            if (result.isConfirmed) {
+                // Delete the empty deposit
+                state.po_deposits.splice(state.current_po, 1);
+                // Adjust current_po if necessary
+                if (state.current_po >= state.po_deposits.length) {
+                    state.current_po = state.po_deposits.length - 1;
+                }
+                // Continue to add new deposit
+            } else {
+                // User chose to complete - stay on current
+                return;
+            }
+        } else {
+            // Validate current PO fields
+            if (!current.client_po_number || !current.client_pic_name || !current.client_po_date) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Warning',
+                    text: 'Please fill all required fields (PO Number, PIC, PO Date)'
+                });
+                return;
+            }
+            // Validate products
+            if (!validateProducts(current.products)) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Warning',
+                    text: 'Please fill all required product fields'
+                });
+                return;
+            }
         }
     }
     state.po_deposits.push({
@@ -484,21 +586,22 @@ watch(
             group.map((g) => {
                 g.products.map((p) => {
                     if (p.price != null && p.quantity != null) {
-                        p.total_price = p.price * p.quantity;
+                        const priceWithTax = calculatePriceWithTax(parseFloat(p.price), p.tax_code);
+                        p.total_price = Math.round(parseFloat(p.quantity) * priceWithTax * 100) / 100;
                     } else {
                         p.total_price = null;
                     }
                     return p;
                 });
-                g.total_price = g.products
+                g.total_price = Math.round(g.products
                     .filter((e) => e.total_price != null)
-                    .reduce((e, c) => e + c.total_price, 0);
+                    .reduce((e, c) => e + c.total_price, 0) * 100) / 100;
                 return g;
             });
-            state.expense = group
+            state.expense = Math.round(group
                 .filter((e) => e.total_price != null)
-                .reduce((e, c) => e + c.total_price, 0);
-            state.balance = state.budget - state.expense ?? 0;
+                .reduce((e, c) => e + c.total_price, 0) * 100) / 100;
+            state.balance = Math.round((state.budget - state.expense) * 100) / 100 ?? 0;
         }
     },
     { deep: true }
@@ -509,23 +612,25 @@ watch(
         if (group.length) {
             group.forEach((g) => {
                 g.products.forEach((p) => {
-                    p.total_price =
-                        p.price != null && p.quantity != null
-                            ? p.price * p.quantity
-                            : null;
+                    if (p.price != null && p.quantity != null) {
+                        const priceWithTax = calculatePriceWithTax(parseFloat(p.price), p.tax_code);
+                        p.total_price = Math.round(parseFloat(p.quantity) * priceWithTax * 100) / 100;
+                    } else {
+                        p.total_price = null;
+                    }
                 });
-                g.total_price = g.products.reduce(
+                g.total_price = Math.round(g.products.reduce(
                     (acc, e) => acc + (e.total_price || 0),
                     0
-                );
+                ) * 100) / 100;
             });
             state.client_po_number = group[0].client_po_number;
             state.client_po_date = group[0].client_po_date;
-            state.budget = group.reduce(
+            state.budget = Math.round(group.reduce(
                 (acc, e) => acc + (e.total_price || 0),
                 0
-            );
-            state.balance = state.budget - (state.expense ?? 0);
+            ) * 100) / 100;
+            state.balance = Math.round((state.budget - (state.expense ?? 0)) * 100) / 100;
         }
     },
     { deep: true }
@@ -614,6 +719,7 @@ watch(
                                     class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 noicon text-14px"
                                     v-model="state.job_number"
                                     required
+                                    :readonly="currentUrl.includes('edit')"
                                 />
                                 <div
                                     class="absolute left-4 text-red-500 text-xl"
@@ -1170,6 +1276,7 @@ watch(
                                                         <select
                                                             class="w-full h-40px px-1 text-sm bg-transparent border-none"
                                                             v-model="product.uom_code"
+                                                            disabled
                                                         >
                                                             <option value="">Select UOM</option>
                                                             <option
@@ -1205,6 +1312,7 @@ watch(
                                                         <select
                                                             class="w-full h-40px px-1 text-sm bg-transparent border-none"
                                                             v-model="product.tax_code"
+                                                            disabled
                                                         >
                                                             <option value="">Select Tax</option>
                                                             <option
@@ -1576,6 +1684,7 @@ watch(
                                                                                 group1.manufacture !=
                                                                                 null
                                                                             "
+                                                                            readonly
                                                                         />
                                                                     </td>
                                                                     <td
@@ -1740,6 +1849,7 @@ watch(
                                                             <select
                                                                 class="w-full h-40px px-1 text-sm bg-transparent border-none"
                                                                 v-model="product.uom_code"
+                                                                disabled
                                                             >
                                                                 <option value="">Select UOM</option>
                                                                 <option
@@ -1775,6 +1885,7 @@ watch(
                                                             <select
                                                                 class="w-full h-40px px-1 text-sm bg-transparent border-none"
                                                                 v-model="product.tax_code"
+                                                                disabled
                                                             >
                                                                 <option value="">Select Tax</option>
                                                                 <option

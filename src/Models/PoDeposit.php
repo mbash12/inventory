@@ -46,6 +46,10 @@ class PoDeposit extends Model
         'id' => 'integer',
         'client_po_date' => 'date',
         'closed_at' => 'date',
+        'budget' => 'decimal:2',
+        'expense' => 'decimal:2',
+        'balance' => 'decimal:2',
+        'total_price' => 'decimal:2',
     ];
     
 

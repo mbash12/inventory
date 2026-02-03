@@ -34,7 +34,10 @@ class Product extends Model
         'project' => 'integer',
         'is_production' => 'boolean',
         'uom_code' => 'string',
-        'tax_code' => 'string'
+        'tax_code' => 'string',
+        'price' => 'decimal:2',
+        'total_price' => 'decimal:2',
+        'quantity' => 'decimal:2',
     ];
 
     public function project(): BelongsTo

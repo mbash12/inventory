@@ -30,7 +30,7 @@ class Project extends Model
         'client_code',
         'po_deposit',
         'is_po_deposit',
-        'deposit',
+
         'is_real',
         'sent_to_del_at',
         'total_price',
@@ -61,6 +61,10 @@ class Project extends Model
         'client_po_date' => 'date',
         'is_po_deposit' => 'boolean',
         'planned_action' => 'boolean',
+        'total_price' => 'decimal:2',
+        'invoiced_amount' => 'decimal:2',
+        'remaining_amount' => 'decimal:2',
+        'used_amount' => 'decimal:2',
     ];
 
     public function products_data(): HasMany

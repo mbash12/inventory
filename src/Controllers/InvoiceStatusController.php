@@ -29,6 +29,11 @@ class InvoiceStatusController extends Controller
      */
     public function syncFromAccounting(Request $request)
     {
+        Log::info('Invoice status sync request received', [
+            'ip' => $request->ip(),
+            'all' => $request->all(),
+        ]);
+        
         $rules = [
             'job_number' => 'required|string',
             'invoice_number' => 'nullable|string',
@@ -54,7 +59,18 @@ class InvoiceStatusController extends Controller
             $status = $request->status;
             
             // Find PoDeposit by job_number
+            // First try direct match (PoDeposit job_number)
             $poDeposit = PoDeposit::where('job_number', $jobNumber)->first();
+            $targetProject = null; // The specific project that was invoiced
+            
+            // If not found, try to find a Project with this job_number and get its PoDeposit
+            // This handles cases where Accounting sends child project job_numbers like "aaa-CD001"
+            if (!$poDeposit) {
+                $targetProject = Project::where('job_number', $jobNumber)->first();
+                if ($targetProject && $targetProject->po_deposit) {
+                    $poDeposit = PoDeposit::find($targetProject->po_deposit);
+                }
+            }
             
             if (!$poDeposit) {
                 Log::warning('PoDeposit not found for invoice status sync', ['job_number' => $jobNumber]);
@@ -158,8 +174,13 @@ class InvoiceStatusController extends Controller
                 // Update project invoice_status
                 $project->invoice_status = $inventoryStatus;
                 
-                // If this is the main project and we have invoice details, update invoice data
-                if ($mainProject && $project->id === $mainProject->id && $request->invoice_number) {
+                // Save invoice to project if:
+                // 1. This is the main project, OR
+                // 2. This is the specific target project (child project that was invoiced)
+                $isMainProject = $mainProject && $project->id === $mainProject->id;
+                $isTargetProject = $targetProject && $project->id === $targetProject->id;
+                
+                if (($isMainProject || $isTargetProject) && $request->invoice_number) {
                     $projectInvoices = json_decode($project->invoices ?? '[]', true) ?? [];
                     
                     // Check if invoice already exists in project
@@ -186,9 +207,11 @@ class InvoiceStatusController extends Controller
                         ];
                         
                         // Update invoiced_amount and remaining_amount
-                        $currentInvoiced = $project->invoiced_amount ?? 0;
-                        $project->invoiced_amount = $currentInvoiced + $invoiceAmount;
-                        $project->remaining_amount = $project->total_price - $project->invoiced_amount;
+                        // Use precise decimal arithmetic to avoid floating-point errors
+                        $currentInvoiced = (float) ($project->invoiced_amount ?? 0);
+                        $totalPrice = (float) ($project->total_price ?? 0);
+                        $project->invoiced_amount = round($currentInvoiced + $invoiceAmount, 2);
+                        $project->remaining_amount = round($totalPrice - $project->invoiced_amount, 2);
                     }
                     
                     $project->invoices = json_encode(array_values($projectInvoices));

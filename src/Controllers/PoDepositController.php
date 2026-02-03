@@ -131,7 +131,7 @@ class PoDepositController extends Controller
             $project->total_price = $projectData['total_price'] ?? null;
             if($is_po_deposit){
                 $project->invoiced_amount = $projectData['invoiced_amount'] ?? 0;
-                $project->remaining_amount = $projectData['total_price'] - ($projectData['invoiced_amount'] ?? 0);
+                $project->remaining_amount = round($projectData['total_price'] - ($projectData['invoiced_amount'] ?? 0), 2);
             }
 
             $project->deposit_id = $deposit_id ?? null;
@@ -195,7 +195,7 @@ class PoDepositController extends Controller
             $project->total_price = $projectData['total_price'] ?? null;
             if($is_po_deposit){
                 $project->invoiced_amount = $projectData['invoiced_amount'] ?? 0;
-                $project->remaining_amount = $projectData['total_price'] - ($projectData['invoiced_amount'] ?? 0);
+                $project->remaining_amount = round($projectData['total_price'] - ($projectData['invoiced_amount'] ?? 0), 2);
             }
 
             $project->deposit_id = $deposit_id ?? null;
