@@ -9,6 +9,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@coders-tm/vue-number-format": "^3.35.4",
     "@popperjs/core": "^2.11.8",
     "@vuepic/vue-datepicker": "^6.0.2",
     "chart.js": "^4.4.0",

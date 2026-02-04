@@ -99,17 +99,23 @@ const calculatePriceWithTax = (price, taxCode) => {
 };
 
 const onProductSelect = (product, selectedData) => {
-    if (selectedData) {
+    if (selectedData && selectedData.name) {
         product.name = selectedData.name;
         product.product_code = selectedData.code;
         product.price = selectedData.selling_price || 0;
         product.description = selectedData.description || '';
-        if (selectedData.unit) {
-            product.uom_code = selectedData.unit.code;
-        }
-        if (selectedData.tax) {
-            product.tax_code = selectedData.tax.code;
-        }
+        // Clear and set UOM code
+        product.uom_code = selectedData.unit ? selectedData.unit.code : null;
+        // Clear and set tax code
+        product.tax_code = selectedData.tax ? selectedData.tax.code : null;
+    } else {
+        // If no selected data or no name, clear the fields
+        product.name = null;
+        product.product_code = null;
+        product.price = null;
+        product.description = null;
+        product.uom_code = null;
+        product.tax_code = null;
     }
 };
 
@@ -181,6 +187,11 @@ const setDelete = (type, i, ii) => {
     confirmDelete.value = true;
 };
 const submit = () => {
+    // Validate all products before submitting (all deposits and actual products)
+    if (!validateAllProducts(null, true)) {
+        return;
+    }
+
     loading();
 
     // Process products to include UOM and Tax codes
@@ -409,12 +420,111 @@ const addNewGroup = (po_number) => {
 };
 
 const validateProducts = (products) => {
-    return products.every(p => 
-        p.name && 
-        p.quantity && 
-        p.price && 
+    return products.every(p =>
+        p.name &&
+        p.quantity &&
+        p.price &&
         p.description
     );
+};
+
+// Comprehensive product validation function similar to MktNewProject.vue
+const validateAllProducts = (specificDepositIndex = null, showAlert = true) => {
+    // Reset errors before validation
+    state.errors = {};
+
+    let hasError = false;
+
+    // Validate products in po_deposits (non-actual)
+    state.po_deposits.forEach((group, groupIndex) => {
+        // If specificDepositIndex is provided, only validate that deposit
+        if (specificDepositIndex !== null && specificDepositIndex !== groupIndex) {
+            return; // Skip this iteration
+        }
+
+        group.products.forEach((product, productIndex) => {
+            // Check if product has a name to determine if it should be validated
+            if (product.name && product.name.trim() !== '') {
+                const errorKey = `po_deposits.${groupIndex}.products.${productIndex}`;
+
+                // For non-payment products (in deposits), quantity, price, UOM, and tax are required
+                if (!product.quantity || parseFloat(product.quantity) <= 0) {
+                    state.errors[`${errorKey}.quantity`] = ['Quantity is required and must be greater than 0'];
+                    hasError = true;
+                }
+
+                if (!product.price || parseFloat(product.price) <= 0) {
+                    state.errors[`${errorKey}.price`] = ['Price is required and must be greater than 0'];
+                    hasError = true;
+                }
+
+                if (!product.uom_code) {
+                    state.errors[`${errorKey}.uom_code`] = ['UOM is required'];
+                    hasError = true;
+                }
+
+                if (!product.tax_code) {
+                    state.errors[`${errorKey}.tax_code`] = ['Tax is required'];
+                    hasError = true;
+                }
+
+                // Description is also required
+                if (!product.description || product.description.trim() === '') {
+                    state.errors[`${errorKey}.description`] = ['Description is required'];
+                    hasError = true;
+                }
+            }
+        });
+    });
+
+    // Validate products in products_group (actual) only if not validating specific deposit
+    if (specificDepositIndex === null) {
+        state.products_group.forEach((group, groupIndex) => {
+            group.products.forEach((product, productIndex) => {
+                // Check if product has a name to determine if it should be validated
+                if (product.name && product.name.trim() !== '') {
+                    const errorKey = `products_group.${groupIndex}.products.${productIndex}`;
+
+                    // For non-payment products (in actual), quantity, price, UOM, and tax are required
+                    if (!product.quantity || parseFloat(product.quantity) <= 0) {
+                        state.errors[`${errorKey}.quantity`] = ['Quantity is required and must be greater than 0'];
+                        hasError = true;
+                    }
+
+                    if (!product.price || parseFloat(product.price) <= 0) {
+                        state.errors[`${errorKey}.price`] = ['Price is required and must be greater than 0'];
+                        hasError = true;
+                    }
+
+                    if (!product.uom_code) {
+                        state.errors[`${errorKey}.uom_code`] = ['UOM is required'];
+                        hasError = true;
+                    }
+
+                    if (!product.tax_code) {
+                        state.errors[`${errorKey}.tax_code`] = ['Tax is required'];
+                        hasError = true;
+                    }
+
+                    // Description is also required
+                    if (!product.description || product.description.trim() === '') {
+                        state.errors[`${errorKey}.description`] = ['Description is required'];
+                        hasError = true;
+                    }
+                }
+            });
+        });
+    }
+
+    if (hasError && showAlert) {
+        alertShowFailed.value = true;
+        return false;
+    } else if (hasError) {
+        // Just return false without showing alert
+        return false;
+    }
+
+    return true;
 };
 
 const isDepositEmpty = (deposit) => {
@@ -481,14 +591,14 @@ const switchPO = async (e) => {
         });
         return;
     }
-    // Validate products
-    if (!validateProducts(current.products)) {
+    // Validate products with comprehensive validation for the current deposit only
+    if (!validateAllProducts(state.current_po, false)) {
         // Reset select to current value since validation failed
         e.target.value = state.current_po;
         Swal.fire({
             icon: 'warning',
             title: 'Warning',
-            text: 'Please fill all required product fields'
+            text: 'Please fill all required product fields (name, quantity, price, UOM, tax, and description)'
         });
         return;
     }
@@ -537,12 +647,12 @@ const addNewDeposit = async (force = false) => {
                 });
                 return;
             }
-            // Validate products
-            if (!validateProducts(current.products)) {
+            // Validate products with comprehensive validation for the current deposit only
+            if (!validateAllProducts(state.current_po, false)) {
                 Swal.fire({
                     icon: 'warning',
                     title: 'Warning',
-                    text: 'Please fill all required product fields'
+                    text: 'Please fill all required product fields (name, quantity, price, UOM, tax, and description)'
                 });
                 return;
             }
@@ -1221,16 +1331,13 @@ watch(
                                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                                             v-if="
                                                                 state.errors.hasOwnProperty(
-                                                                    `products.${ii}.name`
+                                                                    `po_deposits.${i}.products.${ii}.name`
                                                                 )
                                                             "
                                                             >{{
                                                                 state.errors[
-                                                                    `products.${ii}.name`
-                                                                ][0].replace(
-                                                                    `products.${ii}.name `,
-                                                                    ""
-                                                                )
+                                                                    `po_deposits.${i}.products.${ii}.name`
+                                                                ][0]
                                                             }}</span
                                                         >
                                                     </div>
@@ -1255,16 +1362,13 @@ watch(
                                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                                             v-if="
                                                                 state.errors.hasOwnProperty(
-                                                                    `products.${ii}.quantity`
+                                                                    `po_deposits.${i}.products.${ii}.quantity`
                                                                 )
                                                             "
                                                             >{{
                                                                 state.errors[
-                                                                    `products.${ii}.quantity`
-                                                                ][0].replace(
-                                                                    `products.${ii}.quantity `,
-                                                                    ""
-                                                                )
+                                                                    `po_deposits.${i}.products.${ii}.quantity`
+                                                                ][0]
                                                             }}</span
                                                         >
                                                     </div>
@@ -1284,23 +1388,20 @@ watch(
                                                                 :key="uom.id"
                                                                 :value="uom.code"
                                                             >
-                                                                {{ uom.name }} ({{ uom.code }})
+                                                                {{ uom.name }}
                                                             </option>
                                                         </select>
                                                         <span
                                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                                             v-if="
                                                                 state.errors.hasOwnProperty(
-                                                                    `products.${ii}.uom_code`
+                                                                    `po_deposits.${i}.products.${ii}.uom_code`
                                                                 )
                                                             "
                                                             >{{
                                                                 state.errors[
-                                                                    `products.${ii}.uom_code`
-                                                                ][0].replace(
-                                                                    `products.${ii}.uom_code `,
-                                                                    ""
-                                                                )
+                                                                    `po_deposits.${i}.products.${ii}.uom_code`
+                                                                ][0]
                                                             }}</span
                                                         >
                                                     </div>
@@ -1320,23 +1421,20 @@ watch(
                                                                 :key="tax.id"
                                                                 :value="tax.code"
                                                             >
-                                                                {{ tax.name }} ({{ tax.tax_percentage }}%) ({{ tax.code }})
+                                                                {{ tax.name }}
                                                             </option>
                                                         </select>
                                                         <span
                                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                                             v-if="
                                                                 state.errors.hasOwnProperty(
-                                                                    `products.${ii}.tax_code`
+                                                                    `po_deposits.${i}.products.${ii}.tax_code`
                                                                 )
                                                             "
                                                             >{{
                                                                 state.errors[
-                                                                    `products.${ii}.tax_code`
-                                                                ][0].replace(
-                                                                    `products.${ii}.tax_code `,
-                                                                    ""
-                                                                )
+                                                                    `po_deposits.${i}.products.${ii}.tax_code`
+                                                                ][0]
                                                             }}</span
                                                         >
                                                     </div>
@@ -1375,16 +1473,13 @@ watch(
                                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                                             v-if="
                                                                 state.errors.hasOwnProperty(
-                                                                    `products.${ii}.price`
+                                                                    `po_deposits.${i}.products.${ii}.price`
                                                                 )
                                                             "
                                                             >{{
                                                                 state.errors[
-                                                                    `products.${ii}.price`
-                                                                ][0].replace(
-                                                                    `products.${ii}.price `,
-                                                                    ""
-                                                                )
+                                                                    `po_deposits.${i}.products.${ii}.price`
+                                                                ][0]
                                                             }}</span
                                                         >
                                                     </div>
@@ -1459,16 +1554,13 @@ watch(
                                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                                             v-if="
                                                                 state.errors.hasOwnProperty(
-                                                                    `products.${ii}.description`
+                                                                    `po_deposits.${i}.products.${ii}.description`
                                                                 )
                                                             "
                                                             >{{
                                                                 state.errors[
-                                                                    `products.${ii}.description`
-                                                                ][0].replace(
-                                                                    `products.${ii}.description `,
-                                                                    ""
-                                                                )
+                                                                    `po_deposits.${i}.products.${ii}.description`
+                                                                ][0]
                                                             }}</span
                                                         >
                                                     </div>
@@ -1793,16 +1885,13 @@ watch(
                                                                 class="text-xs text-red-500 text-left w-full block pl-4"
                                                                 v-if="
                                                                     state.errors.hasOwnProperty(
-                                                                        `products.${ii}.name`
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.name`
                                                                     )
                                                                 "
                                                                 >{{
                                                                     state.errors[
-                                                                        `products.${ii}.name`
-                                                                    ][0].replace(
-                                                                        `products.${ii}.name `,
-                                                                        ""
-                                                                    )
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.name`
+                                                                    ][0]
                                                                 }}</span
                                                             >
                                                         </div>
@@ -1828,16 +1917,13 @@ watch(
                                                                 class="text-xs text-red-500 text-left w-full block pl-4"
                                                                 v-if="
                                                                     state.errors.hasOwnProperty(
-                                                                        `products.${ii}.quantity`
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.quantity`
                                                                     )
                                                                 "
                                                                 >{{
                                                                     state.errors[
-                                                                        `products.${ii}.quantity`
-                                                                    ][0].replace(
-                                                                        `products.${ii}.quantity `,
-                                                                        ""
-                                                                    )
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.quantity`
+                                                                    ][0]
                                                                 }}</span
                                                             >
                                                         </div>
@@ -1857,23 +1943,20 @@ watch(
                                                                     :key="uom.id"
                                                                     :value="uom.code"
                                                                 >
-                                                                    {{ uom.name }} ({{ uom.code }})
+                                                                    {{ uom.name }}
                                                                 </option>
                                                             </select>
                                                             <span
                                                                 class="text-xs text-red-500 text-left w-full block pl-4"
                                                                 v-if="
                                                                     state.errors.hasOwnProperty(
-                                                                        `products.${ii}.uom_code`
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.uom_code`
                                                                     )
                                                                 "
                                                                 >{{
                                                                     state.errors[
-                                                                        `products.${ii}.uom_code`
-                                                                    ][0].replace(
-                                                                        `products.${ii}.uom_code `,
-                                                                        ""
-                                                                    )
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.uom_code`
+                                                                    ][0]
                                                                 }}</span
                                                             >
                                                         </div>
@@ -1893,23 +1976,20 @@ watch(
                                                                     :key="tax.id"
                                                                     :value="tax.code"
                                                                 >
-                                                                    {{ tax.name }} ({{ tax.tax_percentage }}%) ({{ tax.code }})
+                                                                    {{ tax.name }}
                                                                 </option>
                                                             </select>
                                                             <span
                                                                 class="text-xs text-red-500 text-left w-full block pl-4"
                                                                 v-if="
                                                                     state.errors.hasOwnProperty(
-                                                                        `products.${ii}.tax_code`
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.tax_code`
                                                                     )
                                                                 "
                                                                 >{{
                                                                     state.errors[
-                                                                        `products.${ii}.tax_code`
-                                                                    ][0].replace(
-                                                                        `products.${ii}.tax_code `,
-                                                                        ""
-                                                                    )
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.tax_code`
+                                                                    ][0]
                                                                 }}</span
                                                             >
                                                         </div>
@@ -1948,16 +2028,13 @@ watch(
                                                                 class="text-xs text-red-500 text-left w-full block pl-4"
                                                                 v-if="
                                                                     state.errors.hasOwnProperty(
-                                                                        `products.${ii}.price`
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.price`
                                                                     )
                                                                 "
                                                                 >{{
                                                                     state.errors[
-                                                                        `products.${ii}.price`
-                                                                    ][0].replace(
-                                                                        `products.${ii}.price `,
-                                                                        ""
-                                                                    )
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.price`
+                                                                    ][0]
                                                                 }}</span
                                                             >
                                                         </div>
@@ -2031,16 +2108,13 @@ watch(
                                                                 class="text-xs text-red-500 text-left w-full block pl-4"
                                                                 v-if="
                                                                     state.errors.hasOwnProperty(
-                                                                        `products.${ii}.description`
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.description`
                                                                     )
                                                                 "
                                                                 >{{
                                                                     state.errors[
-                                                                        `products.${ii}.description`
-                                                                    ][0].replace(
-                                                                        `products.${ii}.description `,
-                                                                        ""
-                                                                    )
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.description`
+                                                                    ][0]
                                                                 }}</span
                                                             >
                                                         </div>

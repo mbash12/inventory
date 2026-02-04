@@ -1,10 +1,11 @@
 <script setup>
-import { ref, watch } from 'vue'
+import { component as NumberInput } from '@coders-tm/vue-number-format'
+import { computed } from 'vue'
 
 const props = defineProps({
   modelValue: {
     type: [Number, String],
-    default: ''
+    default: null
   },
   min: {
     type: Number,
@@ -17,108 +18,62 @@ const props = defineProps({
   decimals: {
     type: Number,
     default: 2
+  },
+  placeholder: {
+    type: String,
+    default: ''
   }
 })
 
-const emit = defineEmits(['update:modelValue', 'change'])
+const emit = defineEmits(['update:modelValue', 'change', 'blur'])
 
-const displayValue = ref('')
-
-const formatNumber = (value) => {
-  if (!value && value !== 0) return ''
-  
-  // Parse as float to preserve decimals
-  const numValue = parseFloat(value)
-  
-  if (isNaN(numValue)) return ''
-  
-  // Format with fixed decimal places
-  const fixedValue = numValue.toFixed(props.decimals)
-  
-  // Split into integer and decimal parts
-  const [intPart, decPart] = fixedValue.split('.')
-  
-  // Handle negative numbers
-  const isNegative = intPart.startsWith('-')
-  const absInt = isNegative ? intPart.slice(1) : intPart
-  
-  // Add dots for thousand separators
-  const formattedInt = absInt.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-  
-  // Combine with decimal part
-  const result = isNegative ? `-${formattedInt},${decPart}` : `${formattedInt},${decPart}`
-  
-  return result
-}
-
-const unformatNumber = (value) => {
-  // Remove thousand separators (dots) and convert decimal comma to dot
-  return value.replace(/\./g, '').replace(',', '.')
-}
-
-watch(() => props.modelValue, (newValue) => {
-  displayValue.value = formatNumber(newValue)
-}, { immediate: true })
-
-const handleInput = (event) => {
-  const input = event.target.value
-  
-  // Allow digits, one comma for decimal, and minus at start
-  // Remove all dots (thousand separators) first for processing
-  const cleanInput = input.replace(/\./g, '')
-  
-  // Validate: allow digits, one comma, minus at start
-  if (!/^-?\d*,?\d{0,2}$/.test(cleanInput)) {
-    event.preventDefault()
-    return
+// Ensure modelValue is always a valid value for the component
+const safeModelValue = computed(() => {
+  if (props.modelValue === null || props.modelValue === undefined || props.modelValue === '') {
+    return ''
   }
+  // Ensure it's a number
+  const num = Number(props.modelValue)
+  return isNaN(num) ? '' : num
+})
 
-  // Format for display (add thousand separators)
-  const parts = cleanInput.split(',')
-  const intPart = parts[0]
-  const decPart = parts[1] || ''
-  
-  // Add thousand separators to integer part
-  const isNegative = intPart.startsWith('-')
-  const absInt = isNegative ? intPart.slice(1) : intPart
-  const formattedInt = absInt.replace(/\B(?=(\d{3})+(?!\d))/g, '.')
-  const formattedIntWithSign = isNegative ? `-${formattedInt}` : formattedInt
-  
-  // Reconstruct display value
-  displayValue.value = decPart ? `${formattedIntWithSign},${decPart}` : formattedIntWithSign
-  
-  // Emit numeric value (convert comma back to dot for parsing)
-  const rawValue = cleanInput.replace(',', '.')
-  const numericValue = rawValue ? parseFloat(rawValue) : null
-  
-  if (numericValue === null || isNaN(numericValue)) {
+const handleUpdate = (value) => {
+  // The component returns unmasked numeric value
+  if (value === '' || value === null || value === undefined) {
     emit('update:modelValue', null)
-    emit('change', null)
-    return
+  } else {
+    const num = Number(value)
+    emit('update:modelValue', isNaN(num) ? null : num)
   }
-  
-  if (props.min !== undefined && numericValue < props.min) return
-  if (props.max !== undefined && numericValue > props.max) return
-  
-  emit('update:modelValue', numericValue)
-  emit('change', numericValue)
+}
+
+const handleInput = (value) => {
+  if (value === '' || value === null || value === undefined) {
+    emit('change', null)
+  } else {
+    const num = Number(value)
+    emit('change', isNaN(num) ? null : num)
+  }
+}
+
+const handleBlur = (event) => {
+  emit('blur', event)
 }
 </script>
 
 <template>
-  <input
-    type="text"
-    :value="displayValue"
-    @input="handleInput"
-    @keypress="(e) => {
-      // Allow digits, minus at start, and comma for decimal separator
-      const input = e.target.value
-      const isMinusAtStart = e.key === '-' && input.length === 0
-      const isCommaForDecimal = e.key === ',' && !input.includes(',')
-      if (!/[\d]/.test(e.key) && !isMinusAtStart && !isCommaForDecimal) {
-        e.preventDefault()
-      }
-    }"
+  <NumberInput
+    :model-value="safeModelValue"
+    @update:model-value="handleUpdate"
+    @input:model-value="handleInput"
+    @blur="handleBlur"
+    :placeholder="placeholder"
+    :precision="decimals"
+    separator="."
+    decimal=","
+    :min="min"
+    :max="max"
+    inputmode="decimal"
     v-bind="$attrs"
   />
 </template>

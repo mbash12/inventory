@@ -72,19 +72,23 @@ const taxes = ref([]);
 
 // Handle product selection - autofill price, uom, tax, description
 const onProductSelect = (product, selectedData) => {
-    if (selectedData) {
+    if (selectedData && selectedData.name) {
         product.name = selectedData.name;
         product.product_code = selectedData.code;
         product.price = selectedData.selling_price || 0;
         product.description = selectedData.description || '';
-        // Autofill UOM if available
-        if (selectedData.unit) {
-            product.uom_code = selectedData.unit.code;
-        }
-        // Autofill Tax if available
-        if (selectedData.tax) {
-            product.tax_code = selectedData.tax.code;
-        }
+        // Clear and set UOM code
+        product.uom_code = selectedData.unit ? selectedData.unit.code : null;
+        // Clear and set tax code
+        product.tax_code = selectedData.tax ? selectedData.tax.code : null;
+    } else {
+        // If no selected data or no name, clear the fields
+        product.name = null;
+        product.product_code = null;
+        product.price = null;
+        product.description = null;
+        product.uom_code = null;
+        product.tax_code = null;
     }
 };
 
@@ -196,50 +200,68 @@ const setDelete = (type, i) => {
 const submit = () => {
     // Validate products before submitting
     const validateProducts = () => {
-        const allProductGroups = [
-            ...(state.prd.gimmick?.products || []),
-            ...(state.prd.design?.products || []),
-            ...(state.prd.printing?.products || []),
-            ...(state.prd.payment?.products || [])
+        // Reset errors before validation
+        state.errors = {};
+
+        const productGroups = [
+            { name: 'gimmick', products: state.prd.gimmick?.products || [] },
+            { name: 'design', products: state.prd.design?.products || [] },
+            { name: 'printing', products: state.prd.printing?.products || [] },
+            { name: 'payment', products: state.prd.payment?.products || [] }
         ];
 
-        for (const product of allProductGroups) {
-            if (product.name && product.name.trim() !== '') {
-                // For payment products, only price is required
-                if (state.prd.payment?.products?.includes(product)) {
-                    if (!product.price || product.price <= 0) {
-                        alertShowFailed.value = 'Price is required and must be greater than 0 for payment products';
-                        loading(false);
-                        return false;
-                    }
-                } else {
-                    // For other products, quantity, price, UOM, and tax are required
-                    if (!product.quantity || product.quantity <= 0) {
-                        alertShowFailed.value = 'Quantity is required and must be greater than 0 for all products';
-                        loading(false);
-                        return false;
-                    }
+        // Build index mapping for each product
+        const productIndices = {};
+        productGroups.forEach(group => {
+            group.products.forEach((product, index) => {
+                productIndices[product] = { group: group.name, index: index };
+            });
+        });
 
-                    if (!product.price || product.price <= 0) {
-                        alertShowFailed.value = 'Price is required and must be greater than 0 for all products';
-                        loading(false);
-                        return false;
-                    }
+        let hasError = false;
 
-                    if (!product.uom_code) {
-                        alertShowFailed.value = 'UOM is required for all products';
-                        loading(false);
-                        return false;
-                    }
+        productGroups.forEach(group => {
+            group.products.forEach((product, i) => {
+                if (product.name && product.name.trim() !== '') {
+                    const errorKey = `${group.name}.products.${i}`;
 
-                    if (!product.tax_code) {
-                        alertShowFailed.value = 'Tax is required for all products';
-                        loading(false);
-                        return false;
+                    // For payment products, only price is required
+                    if (group.name === 'payment') {
+                        if (!product.price || product.price <= 0) {
+                            state.errors[`${errorKey}.price`] = ['Price is required and must be greater than 0'];
+                            hasError = true;
+                        }
+                    } else {
+                        // For other products, quantity, price, UOM, and tax are required
+                        if (!product.quantity || product.quantity <= 0) {
+                            state.errors[`${errorKey}.quantity`] = ['Quantity is required and must be greater than 0'];
+                            hasError = true;
+                        }
+
+                        if (!product.price || product.price <= 0) {
+                            state.errors[`${errorKey}.price`] = ['Price is required and must be greater than 0'];
+                            hasError = true;
+                        }
+
+                        if (!product.uom_code) {
+                            state.errors[`${errorKey}.uom_code`] = ['UOM is required'];
+                            hasError = true;
+                        }
+
+                        if (!product.tax_code) {
+                            state.errors[`${errorKey}.tax_code`] = ['Tax is required'];
+                            hasError = true;
+                        }
                     }
                 }
-            }
+            });
+        });
+
+        if (hasError) {
+            alertShowFailed.value = true;
+            return false;
         }
+
         return true;
     };
 
@@ -1019,14 +1041,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.name`
+                                                    `gimmick.products.${i}.name`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.name`
+                                                    `gimmick.products.${i}.name`
                                                 ][0].replace(
-                                                    `products.${i}.name `,
+                                                    `gimmick.products.${i}.name `,
                                                     ""
                                                 )
                                             }}</span
@@ -1047,14 +1069,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.quantity`
+                                                    `gimmick.products.${i}.quantity`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.quantity`
+                                                    `gimmick.products.${i}.quantity`
                                                 ][0].replace(
-                                                    `products.${i}.quantity `,
+                                                    `gimmick.products.${i}.quantity `,
                                                     ""
                                                 )
                                             }}</span
@@ -1083,14 +1105,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.uom_code`
+                                                    `gimmick.products.${i}.uom_code`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.uom_code`
+                                                    `gimmick.products.${i}.uom_code`
                                                 ][0].replace(
-                                                    `products.${i}.uom_code `,
+                                                    `gimmick.products.${i}.uom_code `,
                                                     ""
                                                 )
                                             }}</span
@@ -1119,14 +1141,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.tax_code`
+                                                    `gimmick.products.${i}.tax_code`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.tax_code`
+                                                    `gimmick.products.${i}.tax_code`
                                                 ][0].replace(
-                                                    `products.${i}.tax_code `,
+                                                    `gimmick.products.${i}.tax_code `,
                                                     ""
                                                 )
                                             }}</span
@@ -1147,14 +1169,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.price`
+                                                    `gimmick.products.${i}.price`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.price`
+                                                    `gimmick.products.${i}.price`
                                                 ][0].replace(
-                                                    `products.${i}.price `,
+                                                    `gimmick.products.${i}.price `,
                                                     ""
                                                 )
                                             }}</span
@@ -1187,14 +1209,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.description`
+                                                    `gimmick.products.${i}.description`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.description`
+                                                    `gimmick.products.${i}.description`
                                                 ][0].replace(
-                                                    `products.${i}.description `,
+                                                    `gimmick.products.${i}.description `,
                                                     ""
                                                 )
                                             }}</span
@@ -1290,14 +1312,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.name`
+                                                    `design.products.${i}.name`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.name`
+                                                    `design.products.${i}.name`
                                                 ][0].replace(
-                                                    `products.${i}.name `,
+                                                    `design.products.${i}.name `,
                                                     ""
                                                 )
                                             }}</span
@@ -1318,14 +1340,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.quantity`
+                                                    `design.products.${i}.quantity`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.quantity`
+                                                    `design.products.${i}.quantity`
                                                 ][0].replace(
-                                                    `products.${i}.quantity `,
+                                                    `design.products.${i}.quantity `,
                                                     ""
                                                 )
                                             }}</span
@@ -1354,14 +1376,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.uom_code`
+                                                    `design.products.${i}.uom_code`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.uom_code`
+                                                    `design.products.${i}.uom_code`
                                                 ][0].replace(
-                                                    `products.${i}.uom_code `,
+                                                    `design.products.${i}.uom_code `,
                                                     ""
                                                 )
                                             }}</span
@@ -1390,14 +1412,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.tax_code`
+                                                    `design.products.${i}.tax_code`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.tax_code`
+                                                    `design.products.${i}.tax_code`
                                                 ][0].replace(
-                                                    `products.${i}.tax_code `,
+                                                    `design.products.${i}.tax_code `,
                                                     ""
                                                 )
                                             }}</span
@@ -1418,14 +1440,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.price`
+                                                    `design.products.${i}.price`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.price`
+                                                    `design.products.${i}.price`
                                                 ][0].replace(
-                                                    `products.${i}.price `,
+                                                    `design.products.${i}.price `,
                                                     ""
                                                 )
                                             }}</span
@@ -1458,14 +1480,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.description`
+                                                    `design.products.${i}.description`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.description`
+                                                    `design.products.${i}.description`
                                                 ][0].replace(
-                                                    `products.${i}.description `,
+                                                    `design.products.${i}.description `,
                                                     ""
                                                 )
                                             }}</span
@@ -1558,14 +1580,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.name`
+                                                    `printing.products.${i}.name`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.name`
+                                                    `printing.products.${i}.name`
                                                 ][0].replace(
-                                                    `products.${i}.name `,
+                                                    `printing.products.${i}.name `,
                                                     ""
                                                 )
                                             }}</span
@@ -1586,14 +1608,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.quantity`
+                                                    `printing.products.${i}.quantity`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.quantity`
+                                                    `printing.products.${i}.quantity`
                                                 ][0].replace(
-                                                    `products.${i}.quantity `,
+                                                    `printing.products.${i}.quantity `,
                                                     ""
                                                 )
                                             }}</span
@@ -1622,14 +1644,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.uom_code`
+                                                    `printing.products.${i}.uom_code`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.uom_code`
+                                                    `printing.products.${i}.uom_code`
                                                 ][0].replace(
-                                                    `products.${i}.uom_code `,
+                                                    `printing.products.${i}.uom_code `,
                                                     ""
                                                 )
                                             }}</span
@@ -1658,14 +1680,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.tax_code`
+                                                    `printing.products.${i}.tax_code`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.tax_code`
+                                                    `printing.products.${i}.tax_code`
                                                 ][0].replace(
-                                                    `products.${i}.tax_code `,
+                                                    `printing.products.${i}.tax_code `,
                                                     ""
                                                 )
                                             }}</span
@@ -1686,14 +1708,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.price`
+                                                    `printing.products.${i}.price`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.price`
+                                                    `printing.products.${i}.price`
                                                 ][0].replace(
-                                                    `products.${i}.price `,
+                                                    `printing.products.${i}.price `,
                                                     ""
                                                 )
                                             }}</span
@@ -1726,14 +1748,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.description`
+                                                    `printing.products.${i}.description`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.description`
+                                                    `printing.products.${i}.description`
                                                 ][0].replace(
-                                                    `products.${i}.description `,
+                                                    `printing.products.${i}.description `,
                                                     ""
                                                 )
                                             }}</span
@@ -1822,14 +1844,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.name`
+                                                    `payment.products.${i}.name`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.name`
+                                                    `payment.products.${i}.name`
                                                 ][0].replace(
-                                                    `products.${i}.name `,
+                                                    `payment.products.${i}.name `,
                                                     ""
                                                 )
                                             }}</span
@@ -1851,14 +1873,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.description`
+                                                    `payment.products.${i}.description`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.description`
+                                                    `payment.products.${i}.description`
                                                 ][0].replace(
-                                                    `products.${i}.description `,
+                                                    `payment.products.${i}.description `,
                                                     ""
                                                 )
                                             }}</span
@@ -1887,14 +1909,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.uom_code`
+                                                    `payment.products.${i}.uom_code`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.uom_code`
+                                                    `payment.products.${i}.uom_code`
                                                 ][0].replace(
-                                                    `products.${i}.uom_code `,
+                                                    `payment.products.${i}.uom_code `,
                                                     ""
                                                 )
                                             }}</span
@@ -1923,14 +1945,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.tax_code`
+                                                    `payment.products.${i}.tax_code`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.tax_code`
+                                                    `payment.products.${i}.tax_code`
                                                 ][0].replace(
-                                                    `products.${i}.tax_code `,
+                                                    `payment.products.${i}.tax_code `,
                                                     ""
                                                 )
                                             }}</span
@@ -1951,14 +1973,14 @@ async function loadUomAndTaxData() {
                                             class="text-xs text-red-500 text-left w-full block pl-4"
                                             v-if="
                                                 state.errors.hasOwnProperty(
-                                                    `products.${i}.price`
+                                                    `payment.products.${i}.price`
                                                 )
                                             "
                                             >{{
                                                 state.errors[
-                                                    `products.${i}.price`
+                                                    `payment.products.${i}.price`
                                                 ][0].replace(
-                                                    `products.${i}.price `,
+                                                    `payment.products.${i}.price `,
                                                     ""
                                                 )
                                             }}</span
@@ -2084,7 +2106,7 @@ async function loadUomAndTaxData() {
     <Alert
         type="failed"
         title="Failed to save"
-        content=""
+        content="Please fix the validation errors below before proceeding."
         :show="alertShowFailed"
         @hide="
             () => {

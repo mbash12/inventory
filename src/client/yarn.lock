@@ -19,6 +19,11 @@
   dependencies:
     regenerator-runtime "^0.14.0"
 
+"@coders-tm/vue-number-format@^3.35.4":
+  version "3.35.4"
+  resolved "https://registry.npmjs.org/@coders-tm/vue-number-format/-/vue-number-format-3.35.4.tgz"
+  integrity sha512-ekT8pEtLhaQ5FsimLWOAwK5U4yTVBFjSuCQUvGQCbsXHr1FN7cru7HfxjvDBtebOGRyuAISpzduXcxikoRySKg==
+
 "@fastify/busboy@^2.0.0":
   version "2.1.0"
   resolved "https://registry.npmjs.org/@fastify/busboy/-/busboy-2.1.0.tgz"
