@@ -18,9 +18,9 @@ class Kernel extends ConsoleKernel
             ->withoutOverlapping()
             ->runInBackground();
 
-        // Auto-sync unsynchronized PO Deposits (every 5 minutes)
+        // Auto-sync unsynchronized PO Deposits (every minute)
         $schedule->command('projects:auto-sync --company-id=12')
-            ->everyFiveMinutes()
+            ->everyMinute()
             ->withoutOverlapping()
             ->onOneServer();
     }
