@@ -49,6 +49,7 @@ const state = reactive({
     client_company: null,
     client_code: null,
     client_pic_name: null,
+    ppn_type: 'ppn', // ppn or non_ppn
     budget: null,
     expense: null,
     balance: null,
@@ -234,6 +235,7 @@ const submit = () => {
         client_company: state.client_company,
         client_code: state.client_code,
         client_pic_name: state.client_pic_name,
+        ppn_type: state.ppn_type,
         status: state.status,
         budget: state.budget ?? 0,
         expense: state.expense ?? 0,
@@ -269,14 +271,14 @@ const submit = () => {
 // Function to load UOM and Tax data from accounting API
 async function loadUomAndTaxData() {
     try {
-        // Fetch UOM data using service function
-        const uomResult = await getUomList();
+        // Fetch UOM data using service function with ppn_type
+        const uomResult = await getUomList(state.ppn_type);
         if (uomResult.code === 200) {
             uoms.value = uomResult.data;
         }
 
-        // Fetch Tax data using service function
-        const taxResult = await getTaxList();
+        // Fetch Tax data using service function with ppn_type
+        const taxResult = await getTaxList(state.ppn_type);
         if (taxResult.code === 200) {
             taxes.value = taxResult.data;
         }
@@ -311,6 +313,7 @@ const init = () => {
                 state.client_code = data.client_code;
                 state.client_pic_name = data.client_pic_name;
                 state.status = data.status;
+                state.ppn_type = data.ppn_type || 'ppn';
                 if (data.closed_at) {
                     state.closed_at = dayjs(data.closed_at).format(
                         "YYYY-MM-DD"
@@ -766,6 +769,11 @@ watch(
         });
     }
 );
+
+// Watch for ppn_type changes and reload UOM/Tax data
+watch(() => state.ppn_type, () => {
+    loadUomAndTaxData();
+});
 </script>
 
 <template>
@@ -877,6 +885,23 @@ watch(
                                     "
                                     >{{ state.errors?.pic_name[0] }}</span
                                 >
+                            </div>
+                        </label>
+                        <label class="flex flex-col gap-1 mb-1">
+                            <span class="text-sm text-left">Tax Type</span>
+                            <div
+                                class="w-full border rounded-lg bg-white h-45px relative flex items-center"
+                            >
+                                <select
+                                    v-model="state.ppn_type"
+                                    class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 text-14px"
+                                >
+                                    <option value="ppn">PPN</option>
+                                    <option value="non_ppn">NON-PPN</option>
+                                </select>
+                                <div class="absolute left-4 text-red-500 text-xl">
+                                    <i class="ri-percent-line"></i>
+                                </div>
                             </div>
                         </label>
                     </div>
@@ -1051,7 +1076,7 @@ watch(
                                         <thead class="bg-gray-100">
                                             <tr>
                                                 <td
-                                                    colspan="8"
+                                                    colspan="9"
                                                     class="bg-gray-50 border-b-2 pt-2"
                                                 >
                                                     <table
@@ -1272,7 +1297,12 @@ watch(
                                             </tr>
                                             <tr class="border-b">
                                                 <th
-                                                    class="text-left text-sm px-1 py-2 w-1/5"
+                                                    class="text-left text-sm px-1 py-2 w-1/6"
+                                                >
+                                                    Product Code
+                                                </th>
+                                                <th
+                                                    class="text-left text-sm px-1 py-2 w-1/6"
                                                 >
                                                     Name
                                                 </th>
@@ -1322,10 +1352,36 @@ watch(
                                                         class="flex items-center flex-col gap-1"
                                                     >
                                                         <SelectProduct
-                                                            :value="product.name"
+                                                            :value="product.product_code"
                                                             @select="(data) => onProductSelect(product, data)"
+                                                            :ppnType="state.ppn_type"
                                                             :disabled="group.manufacture != null"
                                                             required
+                                                        />
+                                                        <span
+                                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                                            v-if="
+                                                                state.errors.hasOwnProperty(
+                                                                    `po_deposits.${i}.products.${ii}.product_code`
+                                                                )
+                                                            "
+                                                            >{{
+                                                                state.errors[
+                                                                    `po_deposits.${i}.products.${ii}.product_code`
+                                                                ][0]
+                                                            }}</span
+                                                        >
+                                                    </div>
+                                                </td>
+                                                <td class="">
+                                                    <div
+                                                        class="flex items-center flex-col gap-1"
+                                                    >
+                                                        <input
+                                                            type="text"
+                                                            class="w-full h-40px px-1 text-sm bg-transparent border-none rounded-lg"
+                                                            placeholder="Item name"
+                                                            v-model="product.name"
                                                         />
                                                         <span
                                                             class="text-xs text-red-500 text-left w-full block pl-4"
@@ -1380,7 +1436,6 @@ watch(
                                                         <select
                                                             class="w-full h-40px px-1 text-sm bg-transparent border-none"
                                                             v-model="product.uom_code"
-                                                            disabled
                                                         >
                                                             <option value="">Select UOM</option>
                                                             <option
@@ -1413,7 +1468,6 @@ watch(
                                                         <select
                                                             class="w-full h-40px px-1 text-sm bg-transparent border-none"
                                                             v-model="product.tax_code"
-                                                            disabled
                                                         >
                                                             <option value="">Select Tax</option>
                                                             <option
@@ -1596,7 +1650,7 @@ watch(
                                         </tbody>
                                         <tfoot>
                                             <tr v-if="state.status == 'open'">
-                                                <td colspan="8">
+                                                <td colspan="9">
                                                     <div class="flex border-t">
                                                         <button
                                                             type="button"
@@ -1668,7 +1722,7 @@ watch(
                                             <thead class="bg-gray-100">
                                                 <tr>
                                                     <td
-                                                        colspan="7"
+                                                        colspan="9"
                                                         class="bg-gray-50 border-b-2 pt-2"
                                                     >
                                                         <table
@@ -1821,7 +1875,12 @@ watch(
                                                 </tr>
                                                 <tr class="border-b">
                                                     <th
-                                                        class="text-left text-sm px-1 py-2 w-1/5"
+                                                        class="text-left text-sm px-1 py-2 w-1/6"
+                                                    >
+                                                        Product Code
+                                                    </th>
+                                                    <th
+                                                        class="text-left text-sm px-1 py-2 w-1/6"
                                                     >
                                                         Name
                                                     </th>
@@ -1876,10 +1935,36 @@ watch(
                                                             class="flex items-center flex-col gap-1"
                                                         >
                                                             <SelectProduct
-                                                                :value="product.name"
+                                                                :value="product.product_code"
                                                                 @select="(data) => onProductSelect(product, data)"
+                                                                :ppnType="state.ppn_type"
                                                                 :disabled="group1.manufacture != null"
                                                                 required
+                                                            />
+                                                            <span
+                                                                class="text-xs text-red-500 text-left w-full block pl-4"
+                                                                v-if="
+                                                                    state.errors.hasOwnProperty(
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.product_code`
+                                                                    )
+                                                                "
+                                                                >{{
+                                                                    state.errors[
+                                                                        `products_group.${state.products_group.findIndex(e => e.job_number == group1.job_number)}.products.${ii}.product_code`
+                                                                    ][0]
+                                                                }}</span
+                                                            >
+                                                        </div>
+                                                    </td>
+                                                    <td class="">
+                                                        <div
+                                                            class="flex items-center flex-col gap-1"
+                                                        >
+                                                            <input
+                                                                type="text"
+                                                                class="w-full h-40px px-1 text-sm bg-transparent border-none rounded-lg"
+                                                                placeholder="Item name"
+                                                                v-model="product.name"
                                                             />
                                                             <span
                                                                 class="text-xs text-red-500 text-left w-full block pl-4"
@@ -2183,7 +2268,7 @@ watch(
                                                             'finance'
                                                     "
                                                 >
-                                                    <td colspan="8">
+                                                    <td colspan="9">
                                                         <div
                                                             class="flex border-t"
                                                         >

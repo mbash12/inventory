@@ -8,6 +8,10 @@ const props = defineProps({
     required: String,
     inline: Boolean,
     disabled: Boolean,
+    ppnType: {
+        type: String,
+        default: 'ppn'
+    }
 });
 
 // Ensure display value is always a string
@@ -58,7 +62,7 @@ onMounted(() => {
 });
 
 const getList = () => {
-    getProductList().then((r) => {
+    getProductList(props.ppnType).then((r) => {
         if (r.code == 200) {
             state.allProducts = r.data;
             filterProducts();
@@ -118,6 +122,14 @@ watch(
     () => {
         clearTimeout(waiter);
         waiter = setTimeout(filterProducts, 300);
+    }
+);
+
+// Watch for ppnType changes and reload product list
+watch(
+    () => props.ppnType,
+    () => {
+        getList();
     }
 );
 

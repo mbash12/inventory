@@ -47,6 +47,7 @@ const state = reactive({
     client_company: null,
     client_code: null,
     client_pic_name: null,
+    ppn_type: 'ppn', // ppn or non_ppn
     is_po_deposit: false,
     status: "new",
     products: [{ name: "", product_code: "", quantity: "", description: "" }],
@@ -146,6 +147,11 @@ watch(calculatedTotalPrice, (newVal) => {
         }
     }
 }, { immediate: true });
+
+// Watch for ppn_type changes and reload UOM/Tax data
+watch(() => state.ppn_type, () => {
+    loadUomAndTaxData();
+});
 
 const deleteSelectedProduct = () => {
     confirmDelete.value = false;
@@ -395,6 +401,7 @@ const submit = () => {
         client_company: state.client_company,
         client_code: state.client_code,
         client_pic_name: state.client_pic_name,
+        ppn_type: state.ppn_type,
         status: state.status,
         products_group: products.filter(
             (e) => e.products.filter((p) => p.name !== "").length > 0
@@ -484,6 +491,7 @@ onMounted(() => {
                 state.client_code = data.client_code;
                 state.client_pic_name = data.client_pic_name;
                 state.status = data.status;
+                state.ppn_type = data.ppn_type || 'ppn';
                 state.title = data.title;
                 state.total_price = data.total_price;
                 if (data.closed_at) {
@@ -564,14 +572,14 @@ onMounted(() => {
 // Function to load UOM and Tax data from accounting API
 async function loadUomAndTaxData() {
     try {
-        // Fetch UOM data using service function (uses default company ID)
-        const uomResult = await getUomList();
+        // Fetch UOM data using service function with ppn_type
+        const uomResult = await getUomList(state.ppn_type);
         if (uomResult.code === 200) {
             uoms.value = uomResult.data;
         }
 
-        // Fetch Tax data using service function (uses default company ID)
-        const taxResult = await getTaxList();
+        // Fetch Tax data using service function with ppn_type
+        const taxResult = await getTaxList(state.ppn_type);
         if (taxResult.code === 200) {
             taxes.value = taxResult.data;
         }
@@ -766,8 +774,24 @@ async function loadUomAndTaxData() {
                             </span>
                         </div>
                     </label>
+                    <div class="h-3 flex -mt-1"><!--v-if--></div>
+                    <label class="flex flex-col gap-1 mb-1">
+                        <span class="text-sm text-left">BAST</span>
+                        <div
+                            class="w-full border rounded-lg bg-white h-45px relative flex items-center px-4 gap-4"
+                        >
+                            <input
+                                type="checkbox"
+                                :value="true"
+                                v-model="state.documents.bast"
+                            />
+                            <span>
+                                Require to upload BAST file
+                            </span>
+                        </div>
+                    </label>
 
-                    
+
                 </div>
                 <div class="w-1/2">
                     <label class="flex flex-col gap-1 mb-1">
@@ -874,6 +898,24 @@ async function loadUomAndTaxData() {
                         </div>
                     </label>
                     <label class="flex flex-col gap-1 mb-1">
+                        <span class="text-sm text-left">Tax Type</span>
+                        <div
+                            class="w-full border rounded-lg bg-white h-45px relative flex items-center"
+                        >
+                            <select
+                                v-model="state.ppn_type"
+                                class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 text-14px"
+                            >
+                                <option value="ppn">PPN</option>
+                                <option value="non_ppn">NON-PPN</option>
+                            </select>
+                            <div class="absolute left-4 text-red-500 text-xl">
+                                <i class="ri-percent-line"></i>
+                            </div>
+                        </div>
+                    </label>
+                    <div class="h-3 flex -mt-1"><!--v-if--></div>
+                    <label class="flex flex-col gap-1 mb-1">
                         <span class="text-sm text-left">Client Company</span>
                         <div
                             class="w-full border rounded-lg bg-white h-45px relative flex items-center"
@@ -924,24 +966,6 @@ async function loadUomAndTaxData() {
                                 "
                                 >{{ state.errors?.client_pic_name[0] }}</span
                             >
-                        </div>
-                    </label>
-
-                    <label class="flex flex-col gap-1 mb-1">
-                        <div class="flex justify-between">
-                            <span class="text-sm text-left">BAST</span>
-                        </div>
-                        <div
-                            class="w-full border rounded-lg bg-white h-45px relative flex items-center px-4 gap-4"
-                        >
-                            <input
-                                type="checkbox"
-                                :value="true"
-                                v-model="state.documents.bast"
-                            />
-                            <span>
-                                Require to upload BAST file
-                            </span>
                         </div>
                     </label>
                 </div>
@@ -997,7 +1021,10 @@ async function loadUomAndTaxData() {
                     <table class="w-full rounded-lg" style="overflow: visible;">
                         <thead class="bg-gray-100">
                             <tr class="border-b">
-                                <th class="text-left text-sm px-4 py-2 w-1/4">
+                                <th class="text-left text-sm px-4 py-2 w-1/6">
+                                    Product Code
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-1/6">
                                     Product Name
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
@@ -1034,8 +1061,37 @@ async function loadUomAndTaxData() {
                                     >
                                         <SelectProduct
                                             @select="(e) => onProductSelect(product, e)"
-                                            :value="product.name"
+                                            :value="product.product_code"
+                                            :ppnType="state.ppn_type"
                                             required="true"
+                                        />
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `gimmick.products.${i}.product_code`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `gimmick.products.${i}.product_code`
+                                                ][0].replace(
+                                                    `gimmick.products.${i}.product_code `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
+                                        <input
+                                            type="text"
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none rounded-lg"
+                                            placeholder="Item name"
+                                            v-model="product.name"
                                         />
                                         <span
                                             class="text-xs text-red-500 text-left w-full block pl-4"
@@ -1090,7 +1146,6 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.uom_code"
-                                            disabled
                                         >
                                             <option value="">Select UOM</option>
                                             <option
@@ -1126,7 +1181,6 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.tax_code"
-                                            disabled
                                         >
                                             <option value="">Select Tax</option>
                                             <option
@@ -1236,7 +1290,7 @@ async function loadUomAndTaxData() {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="8">
+                                <td colspan="9">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -1267,7 +1321,10 @@ async function loadUomAndTaxData() {
                     <table class="w-full rounded-lg" style="overflow: visible;">
                         <thead class="bg-gray-100">
                             <tr class="border-b">
-                                <th class="text-left text-sm px-4 py-2 w-1/4">
+                                <th class="text-left text-sm px-4 py-2 w-1/6">
+                                    Product Code
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-1/6">
                                     Item Name
                                 </th>
 
@@ -1305,8 +1362,37 @@ async function loadUomAndTaxData() {
                                     >
                                         <SelectProduct
                                             @select="(e) => onProductSelect(product, e)"
-                                            :value="product.name"
+                                            :value="product.product_code"
+                                            :ppnType="state.ppn_type"
                                             required="true"
+                                        />
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `design.products.${i}.product_code`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `design.products.${i}.product_code`
+                                                ][0].replace(
+                                                    `design.products.${i}.product_code `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
+                                        <input
+                                            type="text"
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none rounded-lg"
+                                            placeholder="Item name"
+                                            v-model="product.name"
                                         />
                                         <span
                                             class="text-xs text-red-500 text-left w-full block pl-4"
@@ -1361,7 +1447,6 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.uom_code"
-                                            disabled
                                         >
                                             <option value="">Select UOM</option>
                                             <option
@@ -1397,7 +1482,6 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.tax_code"
-                                            disabled
                                         >
                                             <option value="">Select Tax</option>
                                             <option
@@ -1507,7 +1591,7 @@ async function loadUomAndTaxData() {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="8">
+                                <td colspan="9">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -1536,7 +1620,10 @@ async function loadUomAndTaxData() {
                     <table class="w-full rounded-lg" style="overflow: visible;">
                         <thead class="bg-gray-100">
                             <tr class="border-b">
-                                <th class="text-left text-sm px-4 py-2 w-1/4">
+                                <th class="text-left text-sm px-4 py-2 w-1/6">
+                                    Product Code
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-1/6">
                                     Product Name
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
@@ -1573,8 +1660,37 @@ async function loadUomAndTaxData() {
                                     >
                                         <SelectProduct
                                             @select="(e) => onProductSelect(product, e)"
-                                            :value="product.name"
+                                            :value="product.product_code"
+                                            :ppnType="state.ppn_type"
                                             required="true"
+                                        />
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `printing.products.${i}.product_code`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `printing.products.${i}.product_code`
+                                                ][0].replace(
+                                                    `printing.products.${i}.product_code `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
+                                        <input
+                                            type="text"
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none rounded-lg"
+                                            placeholder="Item name"
+                                            v-model="product.name"
                                         />
                                         <span
                                             class="text-xs text-red-500 text-left w-full block pl-4"
@@ -1629,7 +1745,6 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.uom_code"
-                                            disabled
                                         >
                                             <option value="">Select UOM</option>
                                             <option
@@ -1665,7 +1780,6 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.tax_code"
-                                            disabled
                                         >
                                             <option value="">Select Tax</option>
                                             <option
@@ -1775,7 +1889,7 @@ async function loadUomAndTaxData() {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="8">
+                                <td colspan="9">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -1806,10 +1920,13 @@ async function loadUomAndTaxData() {
                     <table class="w-full rounded-lg" style="overflow: visible;">
                         <thead class="bg-gray-100">
                             <tr class="border-b">
-                                <th class="text-left text-sm px-4 py-2 w-1/3">
+                                <th class="text-left text-sm px-4 py-2 w-1/6">
+                                    Product Code
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-1/6">
                                     Supplier Name
                                 </th>
-                                <th class="text-left text-sm px-4 py-2 w-1/3">
+                                <th class="text-left text-sm px-4 py-2 w-1/6">
                                     Account Number
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px hidden">
@@ -1837,8 +1954,37 @@ async function loadUomAndTaxData() {
                                     >
                                         <SelectProduct
                                             @select="(e) => onProductSelect(product, e)"
-                                            :value="product.name"
+                                            :value="product.product_code"
+                                            :ppnType="state.ppn_type"
                                             required="true"
+                                        />
+                                        <span
+                                            class="text-xs text-red-500 text-left w-full block pl-4"
+                                            v-if="
+                                                state.errors.hasOwnProperty(
+                                                    `payment.products.${i}.product_code`
+                                                )
+                                            "
+                                            >{{
+                                                state.errors[
+                                                    `payment.products.${i}.product_code`
+                                                ][0].replace(
+                                                    `payment.products.${i}.product_code `,
+                                                    ""
+                                                )
+                                            }}</span
+                                        >
+                                    </div>
+                                </td>
+                                <td class="">
+                                    <div
+                                        class="flex items-center flex-col gap-1"
+                                    >
+                                        <input
+                                            type="text"
+                                            class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none rounded-lg"
+                                            placeholder="Supplier name"
+                                            v-model="product.name"
                                         />
                                         <span
                                             class="text-xs text-red-500 text-left w-full block pl-4"
@@ -1894,7 +2040,6 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.uom_code"
-                                            disabled
                                         >
                                             <option value="">Select UOM</option>
                                             <option
@@ -1930,7 +2075,6 @@ async function loadUomAndTaxData() {
                                         <select
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none"
                                             v-model="product.tax_code"
-                                            disabled
                                         >
                                             <option value="">Select Tax</option>
                                             <option
@@ -2000,7 +2144,7 @@ async function loadUomAndTaxData() {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="6">
+                                <td colspan="7">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"

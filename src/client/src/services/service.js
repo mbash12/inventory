@@ -187,7 +187,7 @@ export const getReport = async (year) => await api("getReport", { params: {year:
 // API functions for getting UOM and Tax data from accounting app
 // Using proxy through inventory app to handle authentication with accounting app
 
-export const getUomList = async (companyId = DEFAULT_COMPANY_ID) => {
+export const getUomList = async (ppnType = 'ppn') => {
     const headers = {
         "Content-Type": "application/json",
     };
@@ -197,14 +197,14 @@ export const getUomList = async (companyId = DEFAULT_COMPANY_ID) => {
         headers["Authorization"] = `Bearer ${currentUser.user.token}`;
     }
 
-    const response = await fetch(`${APIURL}/proxy/accounting/unit?company_id=${companyId}`, {
+    const response = await fetch(`${APIURL}/proxy/accounting/unit?ppn_type=${ppnType}`, {
         method: 'GET',
         headers: headers
     });
     return response.json();
 };
 
-export const getTaxList = async (companyId = DEFAULT_COMPANY_ID) => {
+export const getTaxList = async (ppnType = 'ppn') => {
     const headers = {
         "Content-Type": "application/json",
     };
@@ -214,7 +214,7 @@ export const getTaxList = async (companyId = DEFAULT_COMPANY_ID) => {
         headers["Authorization"] = `Bearer ${currentUser.user.token}`;
     }
 
-    const response = await fetch(`${APIURL}/proxy/accounting/taxes?company_id=${companyId}`, {
+    const response = await fetch(`${APIURL}/proxy/accounting/taxes?ppn_type=${ppnType}`, {
         method: 'GET',
         headers: headers
     });
@@ -222,7 +222,7 @@ export const getTaxList = async (companyId = DEFAULT_COMPANY_ID) => {
 };
 
 // API function for getting Product list from accounting app
-export const getProductList = async (companyId = DEFAULT_COMPANY_ID) => {
+export const getProductList = async (ppnType = 'ppn') => {
     const headers = {
         "Content-Type": "application/json",
     };
@@ -232,7 +232,7 @@ export const getProductList = async (companyId = DEFAULT_COMPANY_ID) => {
         headers["Authorization"] = `Bearer ${currentUser.user.token}`;
     }
 
-    const response = await fetch(`${APIURL}/proxy/accounting/products?company_id=${companyId}`, {
+    const response = await fetch(`${APIURL}/proxy/accounting/products?ppn_type=${ppnType}`, {
         method: 'GET',
         headers: headers
     });

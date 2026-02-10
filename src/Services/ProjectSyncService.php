@@ -11,11 +11,26 @@ class ProjectSyncService
 {
     private $accountingApiUrl;
     private $bearerToken;
+    private $ppnTypeCompanyIdMap;
 
     public function __construct()
     {
         $this->accountingApiUrl = rtrim(config('app.accounting_api_url', env('ACCOUNTING_API_URL', 'http://localhost:8001/api')), '/');
         $this->bearerToken = env('EPROC_INTEGRATION_BEARER');
+
+        // PPN Type to Company ID mapping from env
+        $this->ppnTypeCompanyIdMap = [
+            'ppn' => env('PPN_COMPANY_ID', 12),
+            'non_ppn' => env('NON_PPN_COMPANY_ID', 1),
+        ];
+    }
+
+    /**
+     * Convert ppn_type to company_id
+     */
+    private function getCompanyIdFromPpnType($ppnType)
+    {
+        return $this->ppnTypeCompanyIdMap[$ppnType] ?? $this->ppnTypeCompanyIdMap['ppn'];
     }
 
     /**
@@ -35,8 +50,12 @@ class ProjectSyncService
      */
     public function syncSinglePoDeposit(PoDeposit $poDeposit, ?int $companyId = null): array
     {
-        $companyId = $companyId ?? env('DEFAULT_COMPANY_ID', 12);
-        
+        // Get company_id from ppn_type if not provided
+        if ($companyId === null) {
+            $ppnType = $poDeposit->ppn_type ?? 'ppn';
+            $companyId = $this->getCompanyIdFromPpnType($ppnType);
+        }
+
         $results = [
             'success' => true,
             'message' => '',
@@ -69,9 +88,6 @@ class ProjectSyncService
 
     public function syncToSalesOrders(?int $poDepositId = null, ?int $companyId = null): array
     {
-        // Default company_id from env
-        $companyId = $companyId ?? env('DEFAULT_COMPANY_ID', 12);
-        
         $results = [
             'success' => true,
             'message' => '',
@@ -101,8 +117,15 @@ class ProjectSyncService
                     continue;
                 }
 
+                // Get company_id from ppn_type if not provided
+                $poDepositCompanyId = $companyId;
+                if ($poDepositCompanyId === null) {
+                    $ppnType = $poDeposit->ppn_type ?? 'ppn';
+                    $poDepositCompanyId = $this->getCompanyIdFromPpnType($ppnType);
+                }
+
                 try {
-                    $syncResult = $this->syncPoDeposit($poDeposit, $companyId);
+                    $syncResult = $this->syncPoDeposit($poDeposit, $poDepositCompanyId);
                     $results['synced'][] = $syncResult;
                 } catch (\Exception $e) {
                     Log::error('Error syncing PO Deposit to Sales Order', [
@@ -186,12 +209,14 @@ class ProjectSyncService
                     'quantity' => $product->quantity ?? 0,
                     'unit_price' => $product->price ?? 0,
                     'total' => $itemTotal,
-                    'description' => $product->name . ($product->description ? ' - ' . $product->description : ''),
+                    'description' => $product->description ?? '',
                     'discount' => 0,
                     'discount_percentage' => 0,
                     'tax_amount' => $taxAmount,
-                    'product_id' => null, // Will be looked up by name in accounting
-                    'product_name' => $product->name,
+                    'product_id' => null, // Will be looked up by code in accounting
+                    'product_code' => $product->product_code, // Product identification by code
+                    'product_name' => $product->name, // Custom item name (may differ from master product)
+                    'item_name' => $product->name, // Sales order item name (custom name)
                     'unit_id' => null,
                     'uom_code' => $product->uom_code,
                     'tax_id' => null,
@@ -496,12 +521,14 @@ class ProjectSyncService
                 'quantity' => $product->quantity ?? 0,
                 'unit_price' => $product->price ?? 0,
                 'total' => $itemTotal,
-                'description' => $product->name . ($product->description ? ' - ' . $product->description : ''),
+                'description' => $product->description ?? '',
                 'discount' => 0,
                 'discount_percentage' => 0,
                 'tax_amount' => $taxAmount,
-                'product_id' => null,
-                'product_name' => $product->name,
+                'product_id' => null, // Will be looked up by code in accounting
+                'product_code' => $product->product_code, // Product identification by code
+                'product_name' => $product->name, // Custom item name (may differ from master product)
+                'item_name' => $product->name, // Sales order item name (custom name)
                 'unit_id' => null,
                 'uom_code' => $product->uom_code,
                 'tax_id' => null,

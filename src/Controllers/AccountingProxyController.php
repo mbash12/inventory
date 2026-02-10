@@ -11,26 +11,36 @@ class AccountingProxyController extends Controller
 {
     private $accountingApiUrl;
     private $bearerToken;
+    private $ppnTypeCompanyIdMap;
 
     public function __construct()
     {
         $this->accountingApiUrl = rtrim(config('app.accounting_api_url', env('ACCOUNTING_API_URL', 'http://localhost:8001/api')), '/');
         $this->bearerToken = env('EPROC_INTEGRATION_BEARER');
+
+        // PPN Type to Company ID mapping from env
+        $this->ppnTypeCompanyIdMap = [
+            'ppn' => env('PPN_COMPANY_ID', 12),
+            'non_ppn' => env('NON_PPN_COMPANY_ID', 1),
+        ];
+    }
+
+    /**
+     * Convert ppn_type to company_id
+     */
+    private function getCompanyIdFromPpnType($ppnType)
+    {
+        return $this->ppnTypeCompanyIdMap[$ppnType] ?? $this->ppnTypeCompanyIdMap['ppn'];
     }
 
     public function getUnits(Request $request)
     {
-        $companyId = $request->query('company_id');
-
-        if (empty($companyId)) {
-            return response()->json([
-                'code' => 400,
-                'message' => 'company_id is required'
-            ], 400);
-        }
+        $ppnType = $request->query('ppn_type', 'ppn');
+        $companyId = $this->getCompanyIdFromPpnType($ppnType);
 
         Log::info('Getting units from accounting API', [
             'url' => $this->accountingApiUrl . '/master/unit',
+            'ppn_type' => $ppnType,
             'company_id' => $companyId,
             'bearer_token_set' => !empty($this->bearerToken),
             'bearer_token_length' => strlen($this->bearerToken ?? '')
@@ -64,17 +74,12 @@ class AccountingProxyController extends Controller
 
     public function getTaxes(Request $request)
     {
-        $companyId = $request->query('company_id');
-
-        if (empty($companyId)) {
-            return response()->json([
-                'code' => 400,
-                'message' => 'company_id is required'
-            ], 400);
-        }
+        $ppnType = $request->query('ppn_type', 'ppn');
+        $companyId = $this->getCompanyIdFromPpnType($ppnType);
 
         Log::info('Getting taxes from accounting API', [
             'url' => $this->accountingApiUrl . '/master/taxes',
+            'ppn_type' => $ppnType,
             'company_id' => $companyId,
             'bearer_token_set' => !empty($this->bearerToken),
             'bearer_token_length' => strlen($this->bearerToken ?? '')
@@ -153,17 +158,12 @@ class AccountingProxyController extends Controller
 
     public function getProducts(Request $request)
     {
-        $companyId = $request->query('company_id');
-
-        if (empty($companyId)) {
-            return response()->json([
-                'code' => 400,
-                'message' => 'company_id is required'
-            ], 400);
-        }
+        $ppnType = $request->query('ppn_type', 'ppn');
+        $companyId = $this->getCompanyIdFromPpnType($ppnType);
 
         Log::info('Getting products from accounting API', [
             'url' => $this->accountingApiUrl . '/master/products',
+            'ppn_type' => $ppnType,
             'company_id' => $companyId,
             'bearer_token_set' => !empty($this->bearerToken),
             'bearer_token_length' => strlen($this->bearerToken ?? '')

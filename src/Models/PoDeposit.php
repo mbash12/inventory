@@ -40,6 +40,7 @@ class PoDeposit extends Model
         'last_synced_at',
         'sync_error',
         'sync_retry_count',
+        'ppn_type',
     ];
     
     protected $casts = [
