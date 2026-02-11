@@ -709,8 +709,8 @@ async function loadUomAndTaxData() {
                         <div class="h-3 flex -mt-1">
                             <span
                                 class="text-xs text-red-500"
-                                v-if="state.errors.hasOwnProperty('pic_name')"
-                                >{{ state.errors?.pic_name[0] }}</span
+                                v-if="state.errors.hasOwnProperty('total_price')"
+                                >{{ state.errors?.total_price[0] }}</span
                             >
                         </div>
                     </label>

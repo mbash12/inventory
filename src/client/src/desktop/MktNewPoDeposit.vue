@@ -426,8 +426,7 @@ const validateProducts = (products) => {
     return products.every(p =>
         p.name &&
         p.quantity &&
-        p.price &&
-        p.description
+        p.price
     );
 };
 
@@ -471,11 +470,6 @@ const validateAllProducts = (specificDepositIndex = null, showAlert = true) => {
                     hasError = true;
                 }
 
-                // Description is also required
-                if (!product.description || product.description.trim() === '') {
-                    state.errors[`${errorKey}.description`] = ['Description is required'];
-                    hasError = true;
-                }
             }
         });
     });
@@ -506,12 +500,6 @@ const validateAllProducts = (specificDepositIndex = null, showAlert = true) => {
 
                     if (!product.tax_code) {
                         state.errors[`${errorKey}.tax_code`] = ['Tax is required'];
-                        hasError = true;
-                    }
-
-                    // Description is also required
-                    if (!product.description || product.description.trim() === '') {
-                        state.errors[`${errorKey}.description`] = ['Description is required'];
                         hasError = true;
                     }
                 }
