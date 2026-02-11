@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, ref } from "vue";
+import { reactive, ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { loading } from "../services/router";
 import { login } from "../services/service";
@@ -15,6 +15,7 @@ const user = reactive({
 });
 const alertShowError = ref(false);
 const router = useRouter();
+const currentYear = computed(() => new Date().getFullYear());
 const doLogin = async () => {
   loading();
   errors.email = false;
@@ -157,7 +158,7 @@ const doLogin = async () => {
               <div
                 class="w-full font-normal text-[14px] text-app-112 text-center"
               >
-                © 2023 | Pelangi Sentral Kreasi
+                © {{ currentYear }} | Pelangi Sentral Kreasi
               </div>
             </div>
           </div>

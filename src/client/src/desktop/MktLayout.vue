@@ -206,7 +206,7 @@ const menus = [
         title: "Finance Data",
         activeon: "financedata",
         link: "",
-        roles: ["finance"],
+        roles: ["admin", "finance"],
         submenu: [
             {
                 title: "Non Deposits",

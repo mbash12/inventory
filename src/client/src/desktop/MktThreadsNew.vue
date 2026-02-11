@@ -1,7 +1,7 @@
 div
 <script setup>
 import dayjs from "dayjs";
-import { onMounted, reactive, ref, watch } from "vue";
+import { computed, onMounted, reactive, ref, watch } from "vue";
 import {
     getProject,
     createProject,
@@ -54,8 +54,14 @@ const state = reactive({
     showUpdateButton: false,
     is_plan: true,
     inv_tab: 0,
-    mkt_tab:0,
-    back:null
+    mkt_tab: 0,
+    back: null,
+
+    // Admin-specific states - hierarchical panel
+    admin_selected_role: null, // 'marketing', 'delivery', 'finance', 'design'
+    admin_mkt_tab: 0,
+    admin_is_plan: true,
+    admin_inv_tab: 0,
 });
 const formatMetaData = (key, value) => {
     if (key.includes('amount') || key.includes('price')) {
@@ -66,12 +72,31 @@ const formatMetaData = (key, value) => {
       return value;
     }
   }
+
+// Base filter for regular users
 const notiffilter = [
     { title: "All", value: "" },
     { title: "PO Action", value: "po" },
     { title: "Invoice Progress", value: "invoice" },
     { title: "Logistics Update", value: "logistic" },
 ];
+
+// Extended filter for admin
+const adminNotifFilter = [
+    { title: "All", value: "" },
+    { title: "PO", value: "po" },
+    { title: "Invoice", value: "invoice" },
+    { title: "Logistics", value: "logistic" },
+    { title: "Surat Jalan", value: "do" },
+    { title: "Design", value: "design" },
+    { title: "BAST", value: "bast" },
+    { title: "GR/TPB", value: "gr" },
+];
+
+// Computed property to get the right filter based on user role
+const displayFilter = computed(() => {
+    return user.position === 'admin' ? adminNotifFilter : notiffilter;
+});
 const setnotiffilter = (name) => {
     // loading()
     state.current_tab = name;
@@ -106,8 +131,20 @@ watch(
 
 const submit = () => {
     loading();
+
+    // Determine which tab/states to use based on user role
+    const isAdmin = user.position === 'admin' && state.admin_selected_role;
+    const mktTab = isAdmin ? state.admin_mkt_tab : state.mkt_tab;
+    const isPlan = isAdmin ? state.admin_is_plan : state.is_plan;
+    const invTab = isAdmin ? state.admin_inv_tab : state.inv_tab;
+
+    // For admin, set thread_type based on selected role
+    const threadType = isAdmin
+        ? (state.admin_selected_role === 'marketing' ? 'marketing' : state.thread_type)
+        : state.thread_type;
+
     let data = {
-        thread_type: state.thread_type,
+        thread_type: threadType,
         project: state.project_id,
         invoice_date: state.invoice_date,
         invoice_number: state.invoice_number,
@@ -119,9 +156,9 @@ const submit = () => {
         delivery_deadline: state.delivery_deadline,
         production_deadline: state.production_deadline,
         po_deadline: state.po_deadline,
-    
+
         note: state.note,
-        delete_invoice: state.inv_tab == 2 ? true : false,
+        delete_invoice: invTab == 2 ? true : false,
     };
 
     Object.keys(data).forEach((key) => {
@@ -164,6 +201,12 @@ const loadData = () => {
                 ? JSON.parse(data?.deadline_meta)
                 : null;
             state.thread_type = thread_type(user.position);
+
+            // Admin can always update
+            if (user.position === "admin") {
+                state.showUpdateButton = true;
+            }
+
             if (user.position == "marketing" && data?.client_po_number == null)
                 state.showUpdateButton = true;
             if (
@@ -243,6 +286,254 @@ onMounted(() => {
                             autocomplete="off"
                             @submit.prevent="submit"
                         >
+                            <!-- Admin Panel - Hierarchical Role Selection -->
+                            <div v-if="user.position == 'admin'" class="mb-4">
+                                <div class="text-sm font-semibold text-gray-700 mb-3">Admin Panel - Select Role Action</div>
+
+                                <!-- Role Group Selector -->
+                                <div class="flex flex-wrap gap-2 mb-4">
+                                    <button
+                                        type="button"
+                                        @click="state.admin_selected_role = state.admin_selected_role === 'marketing' ? null : 'marketing'"
+                                        class="px-4 py-2 text-sm font-medium rounded-lg border-2 transition-all"
+                                        :class="state.admin_selected_role === 'marketing' ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-red-500'"
+                                    >
+                                        <i class="ri-megaphone-line mr-1"></i>
+                                        Marketing
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="state.admin_selected_role = state.admin_selected_role === 'delivery' ? null : 'delivery'"
+                                        class="px-4 py-2 text-sm font-medium rounded-lg border-2 transition-all"
+                                        :class="state.admin_selected_role === 'delivery' ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-red-500'"
+                                    >
+                                        <i class="ri-truck-line mr-1"></i>
+                                        Delivery
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="state.admin_selected_role = state.admin_selected_role === 'finance' ? null : 'finance'"
+                                        class="px-4 py-2 text-sm font-medium rounded-lg border-2 transition-all"
+                                        :class="state.admin_selected_role === 'finance' ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-red-500'"
+                                    >
+                                        <i class="ri-money-dollar-circle-line mr-1"></i>
+                                        Finance
+                                    </button>
+                                </div>
+
+                                <!-- Marketing Actions Panel -->
+                                <div v-if="state.admin_selected_role === 'marketing'" class="border rounded-lg p-4 bg-gray-50">
+                                    <div class="text-sm font-medium text-gray-700 mb-3">Marketing Actions</div>
+                                    <div class="flex h-10 w-full bg-white rounded-md mb-2">
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-l-md"
+                                            :class="state.admin_mkt_tab == 0 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_mkt_tab = 0"
+                                        >
+                                            Set Deadline
+                                        </div>
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer"
+                                            :class="state.admin_mkt_tab == 1 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_mkt_tab = 1"
+                                        >
+                                            Set PO Number
+                                        </div>
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-r-md"
+                                            :class="state.admin_mkt_tab == 2 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_mkt_tab = 2"
+                                        >
+                                            Cancel Project
+                                        </div>
+                                    </div>
+
+                                    <!-- Marketing Form Fields -->
+                                    <div v-if="state.admin_mkt_tab == 1">
+                                        <div class="flex gap-4 w-full">
+                                            <label class="flex flex-col gap-2 flex-1">
+                                                <span class="text-sm text-left font-medium">PO Number</span>
+                                                <input
+                                                    type="text"
+                                                    class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                    v-model="state.client_po_number"
+                                                    placeholder="Enter PO Number"
+                                                />
+                                            </label>
+                                            <label class="flex flex-col gap-2 flex-1">
+                                                <span class="text-sm text-left font-medium">PO Date</span>
+                                                <input
+                                                    type="date"
+                                                    class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                    onfocus="this.showPicker()"
+                                                    v-model="state.client_po_date"
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div v-if="state.admin_mkt_tab == 0">
+                                        <label class="flex flex-col gap-2">
+                                            <span class="text-sm text-left font-medium">PO Deadline</span>
+                                            <input
+                                                type="date"
+                                                class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                onfocus="this.showPicker()"
+                                                v-model="state.po_deadline"
+                                            />
+                                        </label>
+                                    </div>
+
+                                    <div v-if="state.admin_mkt_tab == 2">
+                                        <label class="flex flex-col gap-2">
+                                            <span class="text-sm text-left font-medium">Upload Files</span>
+                                            <Upload :files="[]" @update="console.log" />
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Delivery Actions Panel -->
+                                <div v-if="state.admin_selected_role === 'delivery'" class="border rounded-lg p-4 bg-gray-50">
+                                    <div class="text-sm font-medium text-gray-700 mb-3">Delivery Actions</div>
+                                    <div class="flex h-10 w-full bg-white rounded-md mb-2">
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-l-md"
+                                            :class="state.admin_is_plan ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_is_plan = true"
+                                        >
+                                            Set Production Deadline
+                                        </div>
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-r-md"
+                                            :class="!state.admin_is_plan ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_is_plan = false"
+                                        >
+                                            Set Delivery Deadline
+                                        </div>
+                                    </div>
+
+                                    <!-- Delivery Form Fields -->
+                                    <div class="flex gap-4 w-full">
+                                        <label class="flex flex-col gap-2 flex-1" v-if="state.admin_is_plan">
+                                            <span class="text-sm text-left font-medium">Production Deadline</span>
+                                            <input
+                                                type="date"
+                                                class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                onfocus="this.showPicker()"
+                                                v-model="state.production_deadline"
+                                            />
+                                        </label>
+                                        <label class="flex flex-col gap-2 flex-1" v-if="!state.admin_is_plan">
+                                            <span class="text-sm text-left font-medium">Delivery Deadline</span>
+                                            <input
+                                                type="date"
+                                                class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                onfocus="this.showPicker()"
+                                                v-model="state.delivery_deadline"
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Finance Actions Panel -->
+                                <div v-if="state.admin_selected_role === 'finance'" class="border rounded-lg p-4 bg-gray-50">
+                                    <div class="text-sm font-medium text-gray-700 mb-3">Finance Actions</div>
+                                    <div class="flex h-10 w-full bg-white rounded-md mb-2">
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-l-md"
+                                            :class="state.admin_inv_tab == 0 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_inv_tab = 0"
+                                        >
+                                            Update Progress
+                                        </div>
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer"
+                                            :class="state.admin_inv_tab == 1 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_inv_tab = 1"
+                                        >
+                                            Set Invoice
+                                        </div>
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-r-md"
+                                            :class="state.admin_inv_tab == 2 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_inv_tab = 2"
+                                        >
+                                            Delete Invoice
+                                        </div>
+                                    </div>
+
+                                    <!-- Finance Form Fields -->
+                                    <div v-if="state.admin_inv_tab == 1">
+                                        <div class="flex gap-4 w-full">
+                                            <label class="flex flex-col gap-2 flex-1">
+                                                <span class="text-sm text-left font-medium">Invoice Number</span>
+                                                <input
+                                                    type="text"
+                                                    class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                    v-model="state.invoice_number"
+                                                    placeholder="Enter Invoice Number"
+                                                />
+                                            </label>
+                                            <label class="flex flex-col gap-2 flex-1">
+                                                <span class="text-sm text-left font-medium">Invoice Date</span>
+                                                <input
+                                                    type="date"
+                                                    class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                    onfocus="this.showPicker()"
+                                                    v-model="state.invoice_date"
+                                                />
+                                            </label>
+                                        </div>
+                                        <div class="mt-4">
+                                            <label class="flex flex-col gap-2">
+                                                <span class="text-sm text-left font-medium">Amount (Max: {{ nom(state.data?.remaining_amount ?? state.data?.total_price) }})</span>
+                                                <input
+                                                    type="number"
+                                                    class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                    v-model="state.invoiced_amount"
+                                                    :max="state.data?.remaining_amount ?? state.data?.total_price"
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div v-if="state.admin_inv_tab == 2">
+                                        <label class="flex flex-col gap-2">
+                                            <span class="text-sm text-left font-medium">Invoice Number</span>
+                                            <input
+                                                type="text"
+                                                class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                v-model="state.invoice_number"
+                                                placeholder="Enter Invoice Number to Delete"
+                                            />
+                                        </label>
+                                    </div>
+
+                                    <div v-if="state.admin_inv_tab == 0">
+                                        <label class="flex flex-col gap-2">
+                                            <span class="text-sm text-left font-medium">Progress Note</span>
+                                            <textarea
+                                                class="w-full border rounded-lg bg-white p-4 text-14px"
+                                                v-model="state.note"
+                                                rows="3"
+                                                placeholder="Enter progress update..."
+                                            ></textarea>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div v-if="state.admin_selected_role" class="mt-4 pt-4 border-t">
+                                    <button
+                                        type="submit"
+                                        class="w-full h-12 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg flex items-center justify-center gap-2"
+                                    >
+                                        <i class="ri-send-plane-fill text-xl"></i>
+                                        <span>Submit {{ state.admin_selected_role.charAt(0).toUpperCase() + state.admin_selected_role.slice(1) }} Update</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Existing Role Sections (unchanged) -->
                             <div
                                 class="flex h-10 w-full bg-gray-50 rounded-md mb-2"
                                 v-if="user.position == 'marketing'"
@@ -1228,8 +1519,8 @@ onMounted(() => {
                         >Update History</strong
                     >
                 </div>
-                <div class="px-3 border-b flex gap-3">
-                    <template v-for="(item, i) in notiffilter" :key="i">
+                <div class="px-3 border-b flex gap-3 overflow-x-auto">
+                    <template v-for="(item, i) in displayFilter" :key="i">
                         <div
                             class="py-3 border-b-2 px-1 flex gap-1 items-center -mb-1px cursor-pointer"
                             :class="

@@ -55,8 +55,15 @@ const state = reactive({
     showUpdateButton: false,
     is_plan: true,
     inv_tab: 0,
-    mkt_tab:0,
-    back:null,
+    mkt_tab: 0,
+    back: null,
+
+    // Admin-specific states - hierarchical panel
+    admin_selected_role: null, // 'marketing', 'delivery', 'finance', 'design'
+    admin_mkt_tab: 0,
+    admin_is_plan: true,
+    admin_inv_tab: 0,
+    admin_design_tab: 0,
 
 
     do_deadline: null,
@@ -92,6 +99,19 @@ const notiffilter2 = [
     { title: "BAST", value: "bast" },
     { title: "GR/TPB", value: "gr" },
 ];
+
+// Extended filter for admin
+const adminNotifFilter = [
+    { title: "All", value: "" },
+    { title: "PO", value: "po" },
+    { title: "Invoice", value: "invoice" },
+    { title: "Logistics", value: "logistic" },
+    { title: "Surat Jalan", value: "do" },
+    { title: "Design", value: "design" },
+    { title: "BAST", value: "bast" },
+    { title: "GR/TPB", value: "gr" },
+];
+
 const setnotiffilter = (name) => {
     // loading()
     state.current_tab = name;
@@ -148,6 +168,13 @@ const getFileType = (filename) => {
 
 const submit = () => {
     loading();
+
+    // Determine which tab/states to use based on user role
+    const isAdmin = user.position === 'admin' && state.admin_selected_role;
+    const mktTab = isAdmin ? state.admin_mkt_tab : state.mkt_tab;
+    const isPlan = isAdmin ? state.admin_is_plan : state.is_plan;
+    const invTab = isAdmin ? state.admin_inv_tab : state.inv_tab;
+
     let thread_type = state.thread_type;
     if(state.bast_deadline){
         thread_type = "bast"
@@ -164,6 +191,18 @@ const submit = () => {
     if(state.cancel_files.length > 0){
         thread_type = "cancel"
     }
+
+    // For admin, override thread_type based on selected role
+    if (isAdmin) {
+        if (state.admin_selected_role === 'marketing') {
+            thread_type = state.thread_type; // Keep existing logic
+        } else if (state.admin_selected_role === 'delivery') {
+            thread_type = isPlan ? 'do' : 'surat_jalan';
+        } else if (state.admin_selected_role === 'finance') {
+            thread_type = invTab == 0 ? 'update_progress' : (invTab == 1 ? 'invoice' : 'delete_invoice');
+        }
+    }
+
     let data = {
         thread_type: thread_type,
         project: state.project_id,
@@ -179,7 +218,7 @@ const submit = () => {
         po_deadline: state.po_deadline,
 
         note: state.note,
-        delete_invoice: state.inv_tab == 2 ? true : false,
+        delete_invoice: invTab == 2 ? true : false,
 
         do_deadline: state.do_deadline,
         design_deadline: state.design_deadline,
@@ -232,6 +271,12 @@ const loadData = () => {
                 ? JSON.parse(data?.deadline_meta)
                 : null;
             state.thread_type = thread_type(user.position);
+
+            // Admin can always update
+            if (user.position === "admin") {
+                state.showUpdateButton = true;
+            }
+
             // if (user.position == "marketing" && data?.client_po_number == null)
             //     state.showUpdateButton = true;
             // if (
@@ -252,7 +297,7 @@ const loadData = () => {
                 }else{
                     state.showUpdateButton = false;
                 }
-            }else{
+            }else if (user.position !== "admin") {
                 state.showUpdateButton = true;
             }
             
@@ -321,6 +366,315 @@ onMounted(() => {
                             autocomplete="off"
                             @submit.prevent="submit"
                         >
+                            <!-- Admin Panel - Hierarchical Role Selection -->
+                            <div v-if="user.position == 'admin'" class="mb-4">
+                                <div class="text-sm font-semibold text-gray-700 mb-3">Admin Panel - Select Role Action</div>
+
+                                <!-- Role Group Selector -->
+                                <div class="flex flex-wrap gap-2 mb-4">
+                                    <button
+                                        type="button"
+                                        @click="state.admin_selected_role = state.admin_selected_role === 'marketing' ? null : 'marketing'"
+                                        class="px-4 py-2 text-sm font-medium rounded-lg border-2 transition-all"
+                                        :class="state.admin_selected_role === 'marketing' ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-red-500'"
+                                    >
+                                        <i class="ri-megaphone-line mr-1"></i>
+                                        Marketing
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="state.admin_selected_role = state.admin_selected_role === 'delivery' ? null : 'delivery'"
+                                        class="px-4 py-2 text-sm font-medium rounded-lg border-2 transition-all"
+                                        :class="state.admin_selected_role === 'delivery' ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-red-500'"
+                                    >
+                                        <i class="ri-truck-line mr-1"></i>
+                                        Delivery
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="state.admin_selected_role = state.admin_selected_role === 'finance' ? null : 'finance'"
+                                        class="px-4 py-2 text-sm font-medium rounded-lg border-2 transition-all"
+                                        :class="state.admin_selected_role === 'finance' ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-red-500'"
+                                    >
+                                        <i class="ri-money-dollar-circle-line mr-1"></i>
+                                        Finance
+                                    </button>
+                                    <button
+                                        type="button"
+                                        @click="state.admin_selected_role = state.admin_selected_role === 'design' ? null : 'design'"
+                                        class="px-4 py-2 text-sm font-medium rounded-lg border-2 transition-all"
+                                        :class="state.admin_selected_role === 'design' ? 'bg-red-500 border-red-500 text-white' : 'bg-white border-gray-300 text-gray-700 hover:border-red-500'"
+                                    >
+                                        <i class="ri-palette-line mr-1"></i>
+                                        Design
+                                    </button>
+                                </div>
+
+                                <!-- Marketing Actions Panel -->
+                                <div v-if="state.admin_selected_role === 'marketing'" class="border rounded-lg p-4 bg-gray-50">
+                                    <div class="text-sm font-medium text-gray-700 mb-3">Marketing Actions</div>
+                                    <div class="flex h-10 w-full bg-white rounded-md mb-2">
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-l-md"
+                                            :class="state.admin_mkt_tab == 0 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_mkt_tab = 0"
+                                        >
+                                            Set PO Deadline
+                                        </div>
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-r-md"
+                                            :class="state.admin_mkt_tab == 1 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_mkt_tab = 1"
+                                        >
+                                            Set PO Number
+                                        </div>
+                                    </div>
+
+                                    <!-- Marketing Form Fields -->
+                                    <div v-if="state.admin_mkt_tab == 1">
+                                        <div class="flex gap-4 w-full">
+                                            <label class="flex flex-col gap-2 flex-1">
+                                                <span class="text-sm text-left font-medium">PO Number</span>
+                                                <input
+                                                    type="text"
+                                                    class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                    v-model="state.client_po_number"
+                                                    placeholder="Enter PO Number"
+                                                />
+                                            </label>
+                                            <label class="flex flex-col gap-2 flex-1">
+                                                <span class="text-sm text-left font-medium">PO Date</span>
+                                                <input
+                                                    type="date"
+                                                    class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                    onfocus="this.showPicker()"
+                                                    v-model="state.client_po_date"
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div v-if="state.admin_mkt_tab == 0">
+                                        <label class="flex flex-col gap-2">
+                                            <span class="text-sm text-left font-medium">PO Deadline</span>
+                                            <input
+                                                type="date"
+                                                class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                onfocus="this.showPicker()"
+                                                v-model="state.po_deadline"
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Delivery Actions Panel -->
+                                <div v-if="state.admin_selected_role === 'delivery'" class="border rounded-lg p-4 bg-gray-50">
+                                    <div class="text-sm font-medium text-gray-700 mb-3">Delivery Actions</div>
+                                    <div class="flex h-10 w-full bg-white rounded-md mb-2">
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-l-md"
+                                            :class="state.admin_is_plan ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_is_plan = true"
+                                        >
+                                            Set Production Deadline
+                                        </div>
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-r-md"
+                                            :class="!state.admin_is_plan ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_is_plan = false"
+                                        >
+                                            Set Delivery Deadline
+                                        </div>
+                                    </div>
+
+                                    <!-- Delivery Form Fields -->
+                                    <div class="flex gap-4 w-full">
+                                        <label class="flex flex-col gap-2 flex-1" v-if="state.admin_is_plan">
+                                            <span class="text-sm text-left font-medium">Production Deadline</span>
+                                            <input
+                                                type="date"
+                                                class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                onfocus="this.showPicker()"
+                                                v-model="state.production_deadline"
+                                            />
+                                        </label>
+                                        <label class="flex flex-col gap-2 flex-1" v-if="!state.admin_is_plan">
+                                            <span class="text-sm text-left font-medium">Delivery Deadline</span>
+                                            <input
+                                                type="date"
+                                                class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                onfocus="this.showPicker()"
+                                                v-model="state.delivery_deadline"
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Finance Actions Panel -->
+                                <div v-if="state.admin_selected_role === 'finance'" class="border rounded-lg p-4 bg-gray-50">
+                                    <div class="text-sm font-medium text-gray-700 mb-3">Finance Actions</div>
+                                    <div class="flex h-10 w-full bg-white rounded-md mb-2">
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-l-md"
+                                            :class="state.admin_inv_tab == 0 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_inv_tab = 0"
+                                        >
+                                            Update Progress
+                                        </div>
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer"
+                                            :class="state.admin_inv_tab == 1 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_inv_tab = 1"
+                                        >
+                                            Set Invoice
+                                        </div>
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-r-md"
+                                            :class="state.admin_inv_tab == 2 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_inv_tab = 2"
+                                        >
+                                            Delete Invoice
+                                        </div>
+                                    </div>
+
+                                    <!-- Finance Form Fields -->
+                                    <div v-if="state.admin_inv_tab == 1">
+                                        <div class="flex gap-4 w-full">
+                                            <label class="flex flex-col gap-2 flex-1">
+                                                <span class="text-sm text-left font-medium">Invoice Number</span>
+                                                <input
+                                                    type="text"
+                                                    class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                    v-model="state.invoice_number"
+                                                    placeholder="Enter Invoice Number"
+                                                />
+                                            </label>
+                                            <label class="flex flex-col gap-2 flex-1">
+                                                <span class="text-sm text-left font-medium">Invoice Date</span>
+                                                <input
+                                                    type="date"
+                                                    class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                    onfocus="this.showPicker()"
+                                                    v-model="state.invoice_date"
+                                                />
+                                            </label>
+                                        </div>
+                                        <div class="mt-4">
+                                            <label class="flex flex-col gap-2">
+                                                <span class="text-sm text-left font-medium">Amount (Max: {{ nom(state.data?.remaining_amount ?? state.data?.total_price) }})</span>
+                                                <input
+                                                    type="number"
+                                                    class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                    v-model="state.invoiced_amount"
+                                                    :max="state.data?.remaining_amount ?? state.data?.total_price"
+                                                />
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div v-if="state.admin_inv_tab == 2">
+                                        <label class="flex flex-col gap-2">
+                                            <span class="text-sm text-left font-medium">Invoice Number</span>
+                                            <input
+                                                type="text"
+                                                class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                v-model="state.invoice_number"
+                                                placeholder="Enter Invoice Number to Delete"
+                                            />
+                                        </label>
+                                    </div>
+
+                                    <div v-if="state.admin_inv_tab == 0">
+                                        <label class="flex flex-col gap-2">
+                                            <span class="text-sm text-left font-medium">Progress Note</span>
+                                            <textarea
+                                                class="w-full border rounded-lg bg-white p-4 text-14px"
+                                                v-model="state.note"
+                                                rows="3"
+                                                placeholder="Enter progress update..."
+                                            ></textarea>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <!-- Design Actions Panel -->
+                                <div v-if="state.admin_selected_role === 'design'" class="border rounded-lg p-4 bg-gray-50">
+                                    <div class="text-sm font-medium text-gray-700 mb-3">Design Actions</div>
+                                    <div class="flex h-10 w-full bg-white rounded-md mb-2">
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-l-md"
+                                            :class="state.admin_design_tab == 0 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_design_tab = 0"
+                                        >
+                                            Set Design Deadline
+                                        </div>
+                                        <div
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer"
+                                            :class="state.admin_design_tab == 1 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_design_tab = 1"
+                                        >
+                                            Set BAST Deadline
+                                        </div>
+                                        <div
+                                            v-if="state.data?.documents?.gr"
+                                            class="flex-1 h-full flex items-center justify-center font-medium text-sm cursor-pointer rounded-r-md"
+                                            :class="state.admin_design_tab == 2 ? 'bg-red-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'"
+                                            @click="state.admin_design_tab = 2"
+                                        >
+                                            Set GR/TPB Deadline
+                                        </div>
+                                    </div>
+
+                                    <!-- Design Form Fields -->
+                                    <div v-if="state.admin_design_tab == 0">
+                                        <label class="flex flex-col gap-2">
+                                            <span class="text-sm text-left font-medium">Design Deadline</span>
+                                            <input
+                                                type="date"
+                                                class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                onfocus="this.showPicker()"
+                                                v-model="state.design_deadline"
+                                            />
+                                        </label>
+                                    </div>
+
+                                    <div v-if="state.admin_design_tab == 1">
+                                        <label class="flex flex-col gap-2">
+                                            <span class="text-sm text-left font-medium">BAST Deadline</span>
+                                            <input
+                                                type="date"
+                                                class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                onfocus="this.showPicker()"
+                                                v-model="state.bast_deadline"
+                                            />
+                                        </label>
+                                    </div>
+
+                                    <div v-if="state.admin_design_tab == 2 && state.data?.documents?.gr">
+                                        <label class="flex flex-col gap-2">
+                                            <span class="text-sm text-left font-medium">GR/TPB Deadline</span>
+                                            <input
+                                                type="date"
+                                                class="w-full border rounded-lg bg-white h-45px pl-4 pr-4 text-14px"
+                                                onfocus="this.showPicker()"
+                                                v-model="state.gr_deadline"
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div v-if="state.admin_selected_role" class="mt-4 pt-4 border-t">
+                                    <button
+                                        type="submit"
+                                        class="w-full h-12 bg-red-500 hover:bg-red-600 text-white font-medium rounded-lg flex items-center justify-center gap-2"
+                                    >
+                                        <i class="ri-send-plane-fill text-xl"></i>
+                                        <span>Submit {{ state.admin_selected_role.charAt(0).toUpperCase() + state.admin_selected_role.slice(1) }} Update</span>
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Existing Role Sections (unchanged) -->
                             <div
                                 class="flex h-10 w-full bg-gray-50 rounded-md mb-2"
                                 v-if="user.position == 'design'"
@@ -1871,6 +2225,114 @@ onMounted(() => {
                                     >
                                 </div>
                                
+                            </div>
+                            <div class="flex flex-col items-end">
+                                <span class="text-xs text-gray-500">{{
+                                    dayjs(item.created_at).format("D MMM YYYY")
+                                }}</span>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Admin Unified Update History Panel -->
+            <div v-if="user.position === 'admin'" class="w-1/2 w-full bg-white rounded-lg shadow p-6 proform">
+                <div class="px-3">
+                    <strong class="block mb-4 text-lg text-left">All Update History</strong>
+                </div>
+                <div class="px-3 border-b flex gap-3 overflow-x-auto">
+                    <template v-for="(item, i) in adminNotifFilter" :key="i">
+                        <div
+                            class="py-3 border-b-2 px-1 flex gap-1 items-center -mb-1px cursor-pointer whitespace-nowrap"
+                            :class="state.current_tab == item.value ? 'border-[#DF3737]' : 'border-transparent'"
+                            @click="() => setnotiffilter(item.value)"
+                        >
+                            <span
+                                class="text-12px font-inter capitalize"
+                                :class="state.current_tab == item.value ? 'text-[#DF3737] font-bold' : 'text-[#667085]'"
+                            >{{ item.title }}</span>
+                            <span
+                                class="text-10px w-18px h-18px rounded-full flex items-center justify-center -mt-2px font-inter"
+                                :class="state.current_tab == item.value ? 'bg-[#FFD0D0] text-[#DF3737] font-bold' : 'bg-[#DFE1E7] text-[#667085]'"
+                            >{{
+                                item.value == ''
+                                    ? state.progress.length
+                                    : state.progress.filter((x) => x.type == item.value).length
+                            }}</span>
+                        </div>
+                    </template>
+                </div>
+                <div class="flex flex-col">
+                    <template
+                        v-for="(item, i) in state.progress.filter((x) =>
+                            state.current_tab == '' ? x : x.type == state.current_tab
+                        )"
+                        :key="i"
+                    >
+                        <div class="px-3 py-3 border-b flex gap-3">
+                            <div class="flex items-start">
+                                <div
+                                    class="w-40px h-40px bg-[#FFCFCFB2] rounded-full flex items-center justify-center text-[#DF3737]"
+                                >
+                                    <i class="ri-send-plane-line text-xl"></i>
+                                </div>
+                            </div>
+                            <div class="flex flex-col flex-1">
+                                <span
+                                    class="text-xs font-medium text-[#DF3737]"
+                                    >{{
+                                        item.type == "po"
+                                            ? "PO Action"
+                                            : item.type == "invoice"
+                                            ? "Invoice Progress"
+                                            : item.type == "cancel"
+                                            ? "Cancel PO"
+                                            : item.type == "do"
+                                            ? "Surat Jalan Action"
+                                            : item.type == "design"
+                                            ? "Design Process"
+                                            : item.type == "bast"
+                                            ? "BAST"
+                                            : item.type == "gr"
+                                            ? "GR/TPB"
+                                            : "Logistic Update"
+                                    }}</span
+                                >
+                                <div
+                                    class="text-sm mt-1"
+                                    v-html="
+                                        item.notes?.replace(
+                                            /(?:\r\n|\r|\n)/g,
+                                            '<br>'
+                                        )
+                                    "
+                                ></div>
+                                <div
+                                    class="text-sm mt-1 flex flex-col bg-gray-50 p-2 rounded"
+                                    v-if="item?.meta_data != '{}' && item?.meta_data != null && item?.meta_data != '[]'"
+                                >
+                                    <span
+                                        v-for="item in Object.entries(
+                                            JSON.parse(item?.meta_data ?? '{}')
+                                        )"
+                                        class="text-xs text-gray-500"
+                                        v-if="
+                                            !(
+                                                [
+                                                    'invoiced_amount',
+                                                    'total_price',
+                                                    'remaining_amount',
+                                                ].includes(item[0]) &&
+                                                user.position === 'delivery'
+                                            )
+                                        "
+                                        ><span class="capitalize">{{
+                                            item[0].replace("_", " ")
+                                        }}</span>
+                                        : <span>{{ formatMetaData(item[0], item[1]) }}</span>
+                                    </span>
+                                </div>
                             </div>
                             <div class="flex flex-col items-end">
                                 <span class="text-xs text-gray-500">{{
