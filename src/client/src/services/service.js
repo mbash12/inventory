@@ -240,7 +240,7 @@ export const getProductList = async (ppnType = 'ppn') => {
 };
 
 // API function for getting Customer/Contact list from accounting app
-export const getCustomerList = async (search = null, companyId = DEFAULT_COMPANY_ID) => {
+export const getCustomerList = async (search = null, ppnType = 'ppn') => {
     const headers = {
         "Content-Type": "application/json",
     };
@@ -250,7 +250,7 @@ export const getCustomerList = async (search = null, companyId = DEFAULT_COMPANY
         headers["Authorization"] = `Bearer ${currentUser.user.token}`;
     }
 
-    let url = `${APIURL}/proxy/accounting/customers?company_id=${companyId}`;
+    let url = `${APIURL}/proxy/accounting/customers?ppn_type=${ppnType}`;
     if (search) {
         url += `&search=${encodeURIComponent(search)}`;
     }
@@ -277,3 +277,4 @@ export const syncPoDeposit = async (data) => await api("syncPoDeposit", { body: 
 export const getSyncPoDeposits = async (filters) => await api("getSyncPoDeposits", { params: filters });
 export const getSyncPoDepositStatus = async (id) => await api("getSyncPoDepositStatus", { route: "/" + id });
 export const retrySyncPoDeposit = async (id) => await api("retrySyncPoDeposit", { route: "/" + id + "/retry" });
+export const clearSyncData = async (data) => await api("clearSyncData", { body: data });

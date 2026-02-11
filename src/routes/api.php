@@ -174,6 +174,9 @@ use Src\Controllers\InvoiceStatusController;
 // This endpoint is called by Accounting system when invoice is created or paid
 Route::post('/invoice-status/sync', [InvoiceStatusController::class, 'syncFromAccounting'])
     ->middleware('internal.api');
+// Handle invoice deletion from Accounting
+Route::post('/invoice-status/delete', [InvoiceStatusController::class, 'deleteFromAccounting'])
+    ->middleware('internal.api');
 Route::get('/invoice-status/{jobNumber}', [InvoiceStatusController::class, 'getStatus']);
 
 Route::get('/check-db-connection', function () {
@@ -203,10 +206,13 @@ Route::prefix('proxy/accounting')->group(function () {
 Route::prefix('sync')->group(function () {
     // List all PO Deposits with sync status (monitoring page)
     Route::get('/po-deposits', [ProjectSyncController::class, 'index']);
-    
+
     // Get sync status for specific PO Deposit
     Route::get('/po-deposits/{poDepositId}', [ProjectSyncController::class, 'status']);
-    
+
     // Immediate retry for failed sync (no queue)
     Route::post('/po-deposits/{poDepositId}/retry', [ProjectSyncController::class, 'retrySync']);
+    
+    // Clear old sync data
+    Route::delete('/jobs/clear-data', [ProjectSyncController::class, 'clearData']);
 });

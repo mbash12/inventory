@@ -94,7 +94,7 @@ class SyncProjectsToAccounting extends Command
             'max_retries' => 3,
         ]);
 
-        ProjectSyncJob::dispatch($syncJob->id, $poDepositId, $companyId);
+        ProjectSyncJob::dispatch($poDepositId, $companyId, $syncJob->id);
 
         $this->info("Sync job dispatched successfully!");
         $this->info("Sync Job ID: {$syncJob->id}");
@@ -171,7 +171,7 @@ class SyncProjectsToAccounting extends Command
 
         foreach ($failedJobs as $syncJob) {
             $syncJob->markForRetry();
-            ProjectSyncJob::dispatch($syncJob->id, $syncJob->po_deposit_id, $syncJob->company_id);
+            ProjectSyncJob::dispatch($syncJob->po_deposit_id, $syncJob->company_id, $syncJob->id);
             $this->info("Re-dispatched Sync Job ID: {$syncJob->id}");
         }
 

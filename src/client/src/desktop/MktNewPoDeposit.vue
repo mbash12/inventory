@@ -828,6 +828,24 @@ watch(() => state.ppn_type, () => {
                 <div class="flex gap-8">
                     <div class="w-1/2">
                         <label class="flex flex-col gap-1 mb-1">
+                            <span class="text-sm text-left">Tax Type</span>
+                            <div
+                                class="w-full border rounded-lg bg-white h-45px relative flex items-center"
+                            >
+                                <select
+                                    v-model="state.ppn_type"
+                                    class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 text-14px"
+                                >
+                                    <option value="ppn">PPN</option>
+                                    <option value="non_ppn">NON-PPN</option>
+                                </select>
+                                <div class="absolute left-4 text-red-500 text-xl">
+                                    <i class="ri-percent-line"></i>
+                                </div>
+                            </div>
+                        </label>
+                        <div class="h-3 flex -mt-1"><!--v-if--></div>
+                        <label class="flex flex-col gap-1 mb-1">
                             <span class="text-sm text-left">Job Number</span>
                             <div
                                 class="w-full border rounded-lg bg-white h-45px relative flex items-center"
@@ -887,23 +905,6 @@ watch(() => state.ppn_type, () => {
                                 >
                             </div>
                         </label>
-                        <label class="flex flex-col gap-1 mb-1">
-                            <span class="text-sm text-left">Tax Type</span>
-                            <div
-                                class="w-full border rounded-lg bg-white h-45px relative flex items-center"
-                            >
-                                <select
-                                    v-model="state.ppn_type"
-                                    class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 text-14px"
-                                >
-                                    <option value="ppn">PPN</option>
-                                    <option value="non_ppn">NON-PPN</option>
-                                </select>
-                                <div class="absolute left-4 text-red-500 text-xl">
-                                    <i class="ri-percent-line"></i>
-                                </div>
-                            </div>
-                        </label>
                     </div>
                     <div class="w-1/2">
                         <label class="flex flex-col gap-1 mb-1">
@@ -916,6 +917,7 @@ watch(() => state.ppn_type, () => {
                                 <Select1
                                     @select="(e) => { state.client_company = e.name; state.client_code = e.code; if(e.contact_person) state.client_pic_name = e.contact_person; }"
                                     :value="state.client_company"
+                                    :ppnType="state.ppn_type"
                                     required="true"
                                 />
 

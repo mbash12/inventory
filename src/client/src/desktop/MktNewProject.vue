@@ -23,7 +23,7 @@ import Alert from "../components/Alert.vue";
 import Select1 from "../components/Select1.vue";
 import SelectProduct from "../components/SelectProduct.vue";
 import INumber from "../components/INumber.vue";
-import { computed, watch, nextTick } from "vue";
+import { computed, watch } from "vue";
 const confirmDelete = ref(false);
 const confirmSave = ref(false);
 const alertShowSuccess = ref(false);
@@ -63,7 +63,6 @@ const state = reactive({
         bast: false,
         gr: false,
     },
-    manual_total_price: false, // Flag to indicate if user wants to manually enter total price
     back: null,
 });
 
@@ -138,13 +137,11 @@ const calculatedTotalPrice = computed(() => {
     return Math.round(total * 100) / 100;
 });
 
-// Watcher to update total_price when in auto mode
+// Watcher to update total_price automatically from calculated value
 watch(calculatedTotalPrice, (newVal) => {
-    if (!state.manual_total_price) {
-        // Only update if the current value is different from calculated value
-        if (state.total_price !== newVal) {
-            state.total_price = newVal;
-        }
+    // Always update with the calculated value
+    if (state.total_price !== newVal) {
+        state.total_price = newVal;
     }
 }, { immediate: true });
 
@@ -156,47 +153,6 @@ watch(() => state.ppn_type, () => {
 const deleteSelectedProduct = () => {
     confirmDelete.value = false;
     state.prd[state.selected_type].products.splice(state.selected, 1);
-};
-
-// Track if the focus event should trigger manual mode
-const shouldSwitchToManual = ref(true);
-
-const toggleManualTotalPrice = () => {
-    state.manual_total_price = !state.manual_total_price;
-    // Prevent the focus event from switching to manual when toggle is clicked
-    shouldSwitchToManual.value = false;
-    if (!state.manual_total_price) {
-        // Switch back to auto-calculated value
-        state.total_price = calculatedTotalPrice.value;
-    } else {
-        // When switching to manual, preserve the current value or set to calculated if null
-        if (state.total_price === null || state.total_price === undefined || state.total_price === "") {
-            state.total_price = calculatedTotalPrice.value;
-        }
-    }
-};
-
-const onTotalPriceFocus = async (event) => {
-    // Wait for any pending DOM updates
-    await nextTick();
-
-    if (!state.manual_total_price && shouldSwitchToManual.value) {
-        // When user focuses on the field while in auto mode, switch to manual mode
-        state.manual_total_price = true;
-        // Set the value to the calculated value when switching to manual
-        if (state.total_price === null || state.total_price === undefined || state.total_price === "") {
-            state.total_price = calculatedTotalPrice.value;
-        }
-    }
-    // Reset the flag after processing
-    shouldSwitchToManual.value = true;
-};
-
-const onTotalPriceBlur = () => {
-    // On blur, validate the input and ensure it's a number with 2 decimal places
-    if (state.total_price !== null && state.total_price !== undefined && state.total_price !== "") {
-        state.total_price = Math.round((parseFloat(state.total_price) || 0) * 100) / 100;
-    }
 };
 const setDelete = (type, i) => {
     state.selected = i;
@@ -377,23 +333,14 @@ const submit = () => {
         return sum + (productGroup.total_price || 0);
     }, 0) * 100) / 100;
 
-    // Determine the final total price based on whether user chose manual or auto calculation
-    let finalTotalPrice;
-    if (state.manual_total_price) {
-        // Use the manually entered value
-        finalTotalPrice = state.total_price !== null && state.total_price !== undefined && state.total_price !== ""
-            ? Math.round(parseFloat(state.total_price) * 100) / 100
-            : 0;
-    } else {
-        // Use the calculated value
-        finalTotalPrice = calculatedTotalPrice.value;
-    }
+    // Always use the calculated value
+    let finalTotalPrice = calculatedTotalPrice.value;
 
     // console.log(products)
     // return
     let data = {
         title: state.title,
-        total_price: finalTotalPrice, // Use manual input or calculated value
+        total_price: finalTotalPrice, // Always use calculated value
         job_number: state.job_number,
         client_po_date: state.client_po_date,
         pic_name: state.pic_name,
@@ -654,6 +601,24 @@ async function loadUomAndTaxData() {
             <div class="flex gap-8">
                 <div class="w-1/2">
                     <label class="flex flex-col gap-1 mb-1">
+                        <span class="text-sm text-left">Tax Type</span>
+                        <div
+                            class="w-full border rounded-lg bg-white h-45px relative flex items-center"
+                        >
+                            <select
+                                v-model="state.ppn_type"
+                                class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 text-14px"
+                            >
+                                <option value="ppn">PPN</option>
+                                <option value="non_ppn">NON-PPN</option>
+                            </select>
+                            <div class="absolute left-4 text-red-500 text-xl">
+                                <i class="ri-percent-line"></i>
+                            </div>
+                        </div>
+                    </label>
+                    <div class="h-3 flex -mt-1"><!--v-if--></div>
+                    <label class="flex flex-col gap-1 mb-1">
                         <span class="text-sm text-left">Job Number</span>
                         <div
                             class="w-full border rounded-lg bg-white h-45px relative flex items-center"
@@ -727,12 +692,7 @@ async function loadUomAndTaxData() {
                     </label>
 
                     <label class="flex flex-col gap-1 mb-1">
-                        <div class="flex justify-between">
-                            <span class="text-sm text-left">Omzet</span>
-                            <span class="text-blue-500 text-sm cursor-pointer" @click.stop="toggleManualTotalPrice">
-                                {{ state.manual_total_price ? 'Auto' : 'Manual' }}
-                            </span>
-                        </div>
+                        <span class="text-sm text-left">Omzet (Auto-calculated)</span>
                         <div
                             class="w-full border rounded-lg bg-white h-45px relative flex items-center"
                         >
@@ -740,8 +700,7 @@ async function loadUomAndTaxData() {
                                 required
                                 class="bg-transparent w-full h-full rounded-lg pl-45px text-14px"
                                 v-model="state.total_price"
-                                :readonly="!state.manual_total_price"
-                                @blur="onTotalPriceBlur"
+                                readonly
                             />
                             <div class="absolute left-4 text-red-500 text-xl">
                                 <i class="ri-money-dollar-box-line"></i>
@@ -757,23 +716,6 @@ async function loadUomAndTaxData() {
                     </label>
 
 
-                    <label class="flex flex-col gap-1 mb-1">
-                        <div class="flex justify-between">
-                            <span class="text-sm text-left">GR/TBP</span>
-                        </div>
-                        <div
-                            class="w-full border rounded-lg bg-white h-45px relative flex items-center px-4 gap-4"
-                        >
-                            <input
-                                type="checkbox"
-                                :value="true"
-                                v-model="state.documents.gr"
-                            />
-                            <span>
-                                Require to upload GR file
-                            </span>
-                        </div>
-                    </label>
                     <div class="h-3 flex -mt-1"><!--v-if--></div>
                     <label class="flex flex-col gap-1 mb-1">
                         <span class="text-sm text-left">BAST</span>
@@ -898,24 +840,6 @@ async function loadUomAndTaxData() {
                         </div>
                     </label>
                     <label class="flex flex-col gap-1 mb-1">
-                        <span class="text-sm text-left">Tax Type</span>
-                        <div
-                            class="w-full border rounded-lg bg-white h-45px relative flex items-center"
-                        >
-                            <select
-                                v-model="state.ppn_type"
-                                class="bg-transparent w-full h-full rounded-lg pl-45px pr-4 text-14px"
-                            >
-                                <option value="ppn">PPN</option>
-                                <option value="non_ppn">NON-PPN</option>
-                            </select>
-                            <div class="absolute left-4 text-red-500 text-xl">
-                                <i class="ri-percent-line"></i>
-                            </div>
-                        </div>
-                    </label>
-                    <div class="h-3 flex -mt-1"><!--v-if--></div>
-                    <label class="flex flex-col gap-1 mb-1">
                         <span class="text-sm text-left">Client Company</span>
                         <div
                             class="w-full border rounded-lg bg-white h-45px relative flex items-center"
@@ -923,6 +847,7 @@ async function loadUomAndTaxData() {
                             <Select1
                                 @select="(e) => { state.client_company = e.name; state.client_code = e.code; if(e.contact_person) state.client_pic_name = e.contact_person; }"
                                 :value="state.client_company"
+                                :ppnType="state.ppn_type"
                                 required="true"
                             />
                             <div class="absolute left-4 text-red-500 text-xl">
@@ -966,6 +891,24 @@ async function loadUomAndTaxData() {
                                 "
                                 >{{ state.errors?.client_pic_name[0] }}</span
                             >
+                        </div>
+                    </label>
+
+                    <label class="flex flex-col gap-1 mb-1">
+                        <div class="flex justify-between">
+                            <span class="text-sm text-left">GR/TBP</span>
+                        </div>
+                        <div
+                            class="w-full border rounded-lg bg-white h-45px relative flex items-center px-4 gap-4"
+                        >
+                            <input
+                                type="checkbox"
+                                :value="true"
+                                v-model="state.documents.gr"
+                            />
+                            <span>
+                                Require to upload GR file
+                            </span>
                         </div>
                     </label>
                 </div>

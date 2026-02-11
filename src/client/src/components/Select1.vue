@@ -8,6 +8,10 @@ const props = defineProps({
     required: String,
     inline: Boolean,
     disabled: Boolean,
+    ppnType: {
+        type: String,
+        default: 'ppn'
+    }
 });
 
 // Ensure display value is always a string
@@ -29,11 +33,20 @@ const state = reactive({
 onMounted(() => {
     getList();
 });
+
+// Watch for changes in ppnType and refresh the list
+watch(() => props.ppnType, () => {
+    // Only refresh if we're not currently focused (to avoid disrupting user input)
+    if (!state.focus) {
+        getList();
+    }
+});
+
 const getList = () => {
-    getCustomerList(state.search).then((r) => {
+    getCustomerList(state.search, props.ppnType).then((r) => {
         if (r.code == 200) {
-            state.list = r.data.map((e) => ({ 
-                value: e.contact_code, 
+            state.list = r.data.map((e) => ({
+                value: e.contact_code,
                 label: e.name,
                 contact_code: e.contact_code,
                 contact_person: e.contact_person,

@@ -20,11 +20,13 @@ class ProjectSyncJob implements ShouldQueue
 
     protected int $poDepositId;
     protected ?int $companyId;
+    protected ?int $syncJobId;
 
-    public function __construct(int $poDepositId, ?int $companyId = null)
+    public function __construct(int $poDepositId, ?int $companyId = null, ?int $syncJobId = null)
     {
         $this->poDepositId = $poDepositId;
         $this->companyId = $companyId;
+        $this->syncJobId = $syncJobId;
         // Use default queue or configure via env
         $this->onQueue(env('PROJECT_SYNC_QUEUE', 'default'));
     }
@@ -32,15 +34,27 @@ class ProjectSyncJob implements ShouldQueue
     public function handle(ProjectSyncService $syncService): void
     {
         $poDeposit = PoDeposit::find($this->poDepositId);
-        
+
         if (!$poDeposit) {
             Log::error('PoDeposit not found', ['po_deposit_id' => $this->poDepositId]);
             return;
         }
 
+        // If company ID is not provided, determine it from PPN type
+        $companyId = $this->companyId;
+        if ($companyId === null) {
+            $ppnType = $poDeposit->ppn_type ?? 'ppn';
+            $ppnTypeCompanyIdMap = [
+                'ppn' => env('PPN_COMPANY_ID', 12),
+                'non_ppn' => env('NON_PPN_COMPANY_ID', 1),
+            ];
+            $companyId = $ppnTypeCompanyIdMap[$ppnType] ?? $ppnTypeCompanyIdMap['ppn'];
+        }
+
         Log::info('Starting ProjectSyncJob', [
             'po_deposit_id' => $this->poDepositId,
-            'company_id' => $this->companyId,
+            'company_id' => $companyId,
+            'sync_job_id' => $this->syncJobId,
             'attempt' => $this->attempts(),
         ]);
 
@@ -48,8 +62,16 @@ class ProjectSyncJob implements ShouldQueue
             // Update status to syncing
             $poDeposit->update(['sync_status' => 'syncing']);
 
+            // If sync job ID is provided, update its status
+            if ($this->syncJobId) {
+                $syncJob = \Src\Models\SyncJob::find($this->syncJobId);
+                if ($syncJob) {
+                    $syncJob->update(['status' => \Src\Models\SyncJob::STATUS_PROCESSING]);
+                }
+            }
+
             // Perform sync
-            $result = $syncService->syncSinglePoDeposit($poDeposit, $this->companyId);
+            $result = $syncService->syncSinglePoDeposit($poDeposit, $companyId);
 
             // Update based on result
             if (empty($result['errors'])) {
@@ -60,8 +82,20 @@ class ProjectSyncJob implements ShouldQueue
                     'sync_retry_count' => 0,
                 ]);
 
+                // If sync job ID is provided, update its status
+                if ($this->syncJobId) {
+                    $syncJob = \Src\Models\SyncJob::find($this->syncJobId);
+                    if ($syncJob) {
+                        $syncJob->markAsCompleted([
+                            'synced' => $result['synced'],
+                            'message' => 'Sync completed successfully',
+                        ]);
+                    }
+                }
+
                 Log::info('ProjectSyncJob completed successfully', [
                     'po_deposit_id' => $this->poDepositId,
+                    'sync_job_id' => $this->syncJobId,
                     'synced_count' => count($result['synced'] ?? []),
                 ]);
             } else {
@@ -71,8 +105,17 @@ class ProjectSyncJob implements ShouldQueue
                     'sync_retry_count' => $poDeposit->sync_retry_count + 1,
                 ]);
 
+                // If sync job ID is provided, update its status
+                if ($this->syncJobId) {
+                    $syncJob = \Src\Models\SyncJob::find($this->syncJobId);
+                    if ($syncJob) {
+                        $syncJob->markAsFailed(json_encode($result['errors']));
+                    }
+                }
+
                 Log::error('ProjectSyncJob completed with errors', [
                     'po_deposit_id' => $this->poDepositId,
+                    'sync_job_id' => $this->syncJobId,
                     'errors' => $result['errors'],
                 ]);
             }
@@ -84,8 +127,17 @@ class ProjectSyncJob implements ShouldQueue
                 'sync_retry_count' => $poDeposit->sync_retry_count + 1,
             ]);
 
+            // If sync job ID is provided, update its status
+            if ($this->syncJobId) {
+                $syncJob = \Src\Models\SyncJob::find($this->syncJobId);
+                if ($syncJob) {
+                    $syncJob->markAsFailed($e->getMessage());
+                }
+            }
+
             Log::error('ProjectSyncJob failed', [
                 'po_deposit_id' => $this->poDepositId,
+                'sync_job_id' => $this->syncJobId,
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
             ]);
@@ -97,7 +149,7 @@ class ProjectSyncJob implements ShouldQueue
     public function failed(\Throwable $exception): void
     {
         $poDeposit = PoDeposit::find($this->poDepositId);
-        
+
         if ($poDeposit) {
             $poDeposit->update([
                 'sync_status' => 'failed',
@@ -105,8 +157,17 @@ class ProjectSyncJob implements ShouldQueue
             ]);
         }
 
+        // If sync job ID is provided, update its status
+        if ($this->syncJobId) {
+            $syncJob = \Src\Models\SyncJob::find($this->syncJobId);
+            if ($syncJob) {
+                $syncJob->markAsFailed($exception->getMessage());
+            }
+        }
+
         Log::error('ProjectSyncJob permanently failed', [
             'po_deposit_id' => $this->poDepositId,
+            'sync_job_id' => $this->syncJobId,
             'error' => $exception->getMessage(),
         ]);
     }

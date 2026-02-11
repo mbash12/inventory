@@ -16,6 +16,12 @@
             class="mr-2"
           />
           <button
+            @click="showClearModal = true"
+            class="bg-red-500 text-white px-3 py-1.5 rounded hover:bg-red-600 text-sm mr-2"
+          >
+            Clear Data
+          </button>
+          <button
             @click="bulkRetrySync"
             :disabled="selectedItems.length === 0 || bulkRetrying"
             class="bg-orange-500 text-white px-3 py-1.5 rounded hover:bg-orange-600 disabled:opacity-50 text-sm mr-2"
@@ -144,11 +150,46 @@
         <button @click="errorModal.show = false" class="mt-3 bg-gray-500 text-white px-3 py-1 rounded text-sm">Close</button>
       </div>
     </div>
+
+    <!-- Clear Data Modal -->
+    <div v-if="showClearModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" @click="showClearModal = false">
+      <div class="bg-white rounded-lg p-4 max-w-md w-full mx-4" @click.stop>
+        <h3 class="text-base font-bold mb-3">Clear Old Data</h3>
+        <div class="mb-3">
+          <label class="block text-sm mb-1">Days to keep (default: 7)</label>
+          <input 
+            v-model="clearDataForm.days" 
+            type="number" 
+            min="1" 
+            max="365" 
+            class="w-full border rounded px-2 py-1 text-sm"
+            placeholder="Number of days (default: 7)"
+          />
+        </div>
+        <p class="text-sm text-gray-600 mb-4">
+          This will reset sync status for PO Deposit records older than the specified number of days.
+          This action cannot be undone.
+        </p>
+        <div class="bg-red-50 border border-red-200 rounded p-3 mb-4">
+          <p class="text-sm text-red-700 font-medium">Warning: This operation cannot be reversed!</p>
+        </div>
+        <div class="flex justify-end gap-2">
+          <button @click="showClearModal = false" class="bg-gray-500 text-white px-3 py-1 rounded text-sm">Cancel</button>
+          <button 
+            @click="performClearData" 
+            :disabled="clearingData"
+            class="bg-red-500 text-white px-3 py-1 rounded text-sm hover:bg-red-600 disabled:opacity-50"
+          >
+            {{ clearingData ? 'Clearing...' : 'Clear Data' }}
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script>
-import { api } from '../services/service';
+import { api, clearSyncData } from '../services/service';
 
 export default {
   name: 'SyncMonitoring',
@@ -163,6 +204,9 @@ export default {
       searchTimeout: null,
       selectedItems: [],
       bulkRetrying: false,
+      showClearModal: false,
+      clearDataForm: { days: 7 },
+      clearingData: false,
     };
   },
   computed: {
@@ -288,6 +332,38 @@ export default {
     },
     formatDate(date) {
       return new Date(date).toLocaleString();
+    },
+    async performClearData() {
+      const days = parseInt(this.clearDataForm.days) || 7;
+      
+      if (days < 1 || days > 365) {
+        alert('Please enter a number between 1 and 365');
+        return;
+      }
+
+      if (!confirm(`Are you sure you want to reset sync status for PO Deposit records older than ${days} days? This cannot be undone.`)) {
+        return;
+      }
+
+      this.clearingData = true;
+      try {
+        // Call the clear data API using the service
+        const result = await clearSyncData({ days });
+
+        if (result.code === 200) {
+          alert(result.message || `Successfully cleared sync status for PO Deposit records older than ${days} days`);
+          this.showClearModal = false;
+          this.clearDataForm.days = 7; // Reset to default
+          await this.loadData(); // Refresh the data
+        } else {
+          alert(result.message || 'Failed to clear data');
+        }
+      } catch (error) {
+        console.error('Error clearing data:', error);
+        alert('Error clearing data: ' + error.message);
+      } finally {
+        this.clearingData = false;
+      }
     },
   },
 };

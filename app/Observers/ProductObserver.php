@@ -26,6 +26,14 @@ class ProductObserver
      */
     public function updated(Product $product): void
     {
+        // Skip sync on update if disabled via env
+        if (env('PROJECT_SYNC_DISABLED', false)) {
+            Log::debug('ProductObserver: Skipping update sync - PROJECT_SYNC_DISABLED is true', [
+                'product_id' => $product->id,
+            ]);
+            return;
+        }
+
         $this->triggerResync($product, 'updated');
     }
 
@@ -44,6 +52,14 @@ class ProductObserver
      */
     public function deleted(Product $product): void
     {
+        // Skip sync on delete if disabled via env
+        if (env('PROJECT_SYNC_DISABLED', false)) {
+            Log::debug('ProductObserver: Skipping delete sync - PROJECT_SYNC_DISABLED is true', [
+                'product_id' => $product->id,
+            ]);
+            return;
+        }
+
         $this->triggerResync($product, 'deleted');
     }
 
@@ -149,7 +165,9 @@ class ProductObserver
         ]);
 
         // Dispatch sync job to queue with a small delay to allow batch operations to complete
-        $companyId = env('DEFAULT_COMPANY_ID', 12);
+        // Determine company ID based on PPN type
+        $ppnType = $poDeposit->ppn_type ?? 'ppn';
+        $companyId = $this->getCompanyIdFromPpnType($ppnType);
         ProjectSyncJob::dispatch($poDeposit->id, $companyId)
             ->delay(now()->addSeconds(5));
 
@@ -160,5 +178,18 @@ class ProductObserver
             'job_number' => $poDeposit->job_number,
             'event' => $event,
         ]);
+    }
+    
+    /**
+     * Convert ppn_type to company_id
+     */
+    private function getCompanyIdFromPpnType($ppnType)
+    {
+        $ppnTypeCompanyIdMap = [
+            'ppn' => env('PPN_COMPANY_ID', 12),
+            'non_ppn' => env('NON_PPN_COMPANY_ID', 1),
+        ];
+        
+        return $ppnTypeCompanyIdMap[$ppnType] ?? $ppnTypeCompanyIdMap['ppn'];
     }
 }

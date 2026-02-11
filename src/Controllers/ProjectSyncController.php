@@ -79,7 +79,14 @@ class ProjectSyncController extends Controller
             ], 404);
         }
 
-        $companyId = $request->input('company_id') ?? env('DEFAULT_COMPANY_ID', 12);
+        // Get company_id from request or determine from ppn_type if not provided
+        $companyId = $request->input('company_id');
+        if ($companyId === null) {
+            $ppnType = $poDeposit->ppn_type ?? 'ppn';
+            $companyId = $this->getCompanyIdFromPpnType($ppnType);
+        } else {
+            $companyId = (int)$companyId;
+        }
 
         try {
             // Update status
@@ -162,5 +169,76 @@ class ProjectSyncController extends Controller
                 'can_retry' => in_array($poDeposit->sync_status, ['failed', null]),
             ]
         ]);
+    }
+
+    /**
+     * Clear old completed PO Deposit sync records
+     */
+    public function clearData(Request $request)
+    {
+        $days = $request->input('days', 7);
+        
+        // Validate days parameter
+        if ($days < 1 || $days > 365) {
+            return response()->json([
+                'code' => 400,
+                'message' => 'Days parameter must be between 1 and 365'
+            ], 400);
+        }
+
+        // Count records that would be cleared
+        $deleteBeforeDate = now()->subDays($days);
+        $countToClear = \Src\Models\PoDeposit::whereNotNull('sync_status')
+            ->where('last_synced_at', '<=', $deleteBeforeDate)
+            ->count();
+
+        if ($countToClear === 0) {
+            return response()->json([
+                'code' => 200,
+                'message' => 'No records to clear',
+                'data' => [
+                    'records_to_clear' => 0,
+                    'days_old' => $days
+                ]
+            ]);
+        }
+
+        // Perform the update to reset sync status for old records
+        $clearedCount = \Src\Models\PoDeposit::whereNotNull('sync_status')
+            ->where('last_synced_at', '<=', $deleteBeforeDate)
+            ->update([
+                'sync_status' => null,
+                'sync_error' => null,
+                'sync_retry_count' => 0,
+                'last_synced_at' => null
+            ]);
+
+        \Illuminate\Support\Facades\Log::info('Cleared old PO Deposit sync records', [
+            'days_old' => $days,
+            'records_cleared' => $clearedCount,
+            'cleared_before' => $deleteBeforeDate->toISOString()
+        ]);
+
+        return response()->json([
+            'code' => 200,
+            'message' => "Successfully cleared sync status for {$clearedCount} old PO Deposit records older than {$days} days",
+            'data' => [
+                'records_cleared' => $clearedCount,
+                'days_old' => $days
+            ]
+        ]);
+    }
+    
+    /**
+     * Convert ppn_type to company_id
+     */
+    private function getCompanyIdFromPpnType($ppnType)
+    {
+        $ppnTypeCompanyIdMap = [
+            'ppn' => env('PPN_COMPANY_ID', 12),
+            'non_ppn' => env('NON_PPN_COMPANY_ID', 1),
+        ];
+        
+        return $ppnTypeCompanyIdMap[$ppnType] ?? $ppnTypeCompanyIdMap['ppn'];
     }
 }

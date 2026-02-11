@@ -114,16 +114,16 @@ class AccountingProxyController extends Controller
     public function getCustomers(Request $request)
     {
         $companyId = $request->query('company_id');
+        $ppnType = $request->query('ppn_type', 'ppn');
 
+        // If company_id is not provided, derive it from ppn_type
         if (empty($companyId)) {
-            return response()->json([
-                'code' => 400,
-                'message' => 'company_id is required'
-            ], 400);
+            $companyId = $this->getCompanyIdFromPpnType($ppnType);
         }
 
         Log::info('Getting customers from accounting API', [
             'url' => $this->accountingApiUrl . '/master/customers',
+            'ppn_type' => $ppnType,
             'company_id' => $companyId,
             'bearer_token_set' => !empty($this->bearerToken),
             'bearer_token_length' => strlen($this->bearerToken ?? '')

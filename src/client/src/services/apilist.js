@@ -382,6 +382,11 @@ export const apilist = {
         url:"/sync/po-deposits",
         auth:true,
         method:'POST'
+    },
+    clearSyncData:{
+        url:"/sync/jobs/clear-data",
+        auth:true,
+        method:'DELETE'
     }
 
 }
