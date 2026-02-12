@@ -1,3 +1,5 @@
+name: inventory_app_dev
+
 services:
   app:
     image: 2b88981b5ce9
@@ -7,3 +9,11 @@ services:
       - .:/var/www/html
     ports:
       - "9009:80"
+      
+  node:
+      image: node:20
+      container_name: inventory_node
+      working_dir: /var/www/html/src/client
+      volumes:
+        - .:/var/www/html
+      command: tail -f /dev/null

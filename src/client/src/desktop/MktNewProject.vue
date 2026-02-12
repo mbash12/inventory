@@ -28,6 +28,8 @@ const confirmDelete = ref(false);
 const confirmSave = ref(false);
 const alertShowSuccess = ref(false);
 const alertShowFailed = ref(false);
+const showTaxAlert = ref(false);
+const taxAlertMessage = ref('');
 const route = useRoute();
 const router = useRouter();
 const currentUrl = route.path;
@@ -79,8 +81,15 @@ const onProductSelect = (product, selectedData) => {
         product.description = selectedData.description || '';
         // Clear and set UOM code
         product.uom_code = selectedData.unit ? selectedData.unit.code : null;
-        // Clear and set tax code
-        product.tax_code = selectedData.tax ? selectedData.tax.code : null;
+        
+        // For NON-PPN, always set tax to 0% regardless of product's tax
+        if (state.ppn_type === 'non_ppn') {
+            const zeroTax = taxes.value?.find(tax => parseFloat(tax.tax_percentage) === 0);
+            product.tax_code = zeroTax ? zeroTax.code : null;
+        } else {
+            // For PPN, use product's tax
+            product.tax_code = selectedData.tax ? selectedData.tax.code : null;
+        }
     } else {
         // If no selected data or no name, clear the fields
         product.name = null;
@@ -146,8 +155,19 @@ watch(calculatedTotalPrice, (newVal) => {
 }, { immediate: true });
 
 // Watch for ppn_type changes and reload UOM/Tax data
-watch(() => state.ppn_type, () => {
-    loadUomAndTaxData();
+watch(() => state.ppn_type, async () => {
+    await loadUomAndTaxData();
+    
+    // Check if 0% tax exists for NON-PPN
+    if (state.ppn_type === 'non_ppn') {
+        const zeroTax = taxes.value?.find(tax => parseFloat(tax.tax_percentage) === 0);
+        if (!zeroTax) {
+            taxAlertMessage.value = 'Tax with 0% percentage (Non-PPN) is required. Please create a tax with 0% percentage in the Accounting system first.';
+            showTaxAlert.value = true;
+            // Change back to PPN to prevent creating non-ppn project
+            state.ppn_type = 'ppn';
+        }
+    }
 });
 
 const deleteSelectedProduct = () => {
@@ -160,6 +180,16 @@ const setDelete = (type, i) => {
     confirmDelete.value = true;
 };
 const submit = () => {
+    // Check if NON-PPN is selected but 0% tax doesn't exist
+    if (state.ppn_type === 'non_ppn') {
+        const zeroTax = taxes.value?.find(tax => parseFloat(tax.tax_percentage) === 0);
+        if (!zeroTax) {
+            taxAlertMessage.value = 'Tax with 0% percentage (Non-PPN) is required. Please create a tax with 0% percentage in the Accounting system first.';
+            showTaxAlert.value = true;
+            return;
+        }
+    }
+    
     // Validate products before submitting
     const validateProducts = () => {
         // Reset errors before validation
@@ -2190,6 +2220,17 @@ async function loadUomAndTaxData() {
         @fire="submit"
     >
     </Confirm>
+    <Alert
+        type="failed"
+        title="Tax Required"
+        :content="taxAlertMessage"
+        :show="showTaxAlert"
+        @hide="
+            () => {
+                showTaxAlert = false;
+            }
+        "
+    ></Alert>
     <Alert
         type="failed"
         title="Failed to save"
