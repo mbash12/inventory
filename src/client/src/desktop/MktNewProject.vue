@@ -102,7 +102,10 @@ const onProductSelect = (product, selectedData) => {
 };
 
 // Helper function to calculate price with tax
-const calculatePriceWithTax = (price, taxCode) => {
+// includePpn: if true, the price already includes PPN — return as-is
+// includePpn: if false (default), add tax on top of the base price
+const calculatePriceWithTax = (price, taxCode, includePpn = false) => {
+    if (includePpn) return price; // price already includes PPN, no extra tax added
     if (!taxCode) return price;
 
     // Find the tax object by code to get the percentage
@@ -129,7 +132,7 @@ const calculatedTotalPrice = computed(() => {
 
     nonPaymentProducts.forEach(product => {
         if (product.name !== "" && product.quantity && product.price) {
-            const priceWithTax = calculatePriceWithTax(parseFloat(product.price), product.tax_code);
+            const priceWithTax = calculatePriceWithTax(parseFloat(product.price), product.tax_code, product.include_ppn);
             total += parseFloat(product.quantity) * priceWithTax;
         }
     });
@@ -273,7 +276,7 @@ const submit = () => {
                 } else {
                     // For other sections, multiply quantity by price with tax
                     if (product.quantity && product.price) {
-                        const priceWithTax = calculatePriceWithTax(parseFloat(product.price), product.tax_code);
+                        const priceWithTax = calculatePriceWithTax(parseFloat(product.price), product.tax_code, product.include_ppn);
                         return sum + (parseFloat(product.quantity) * priceWithTax);
                     }
                 }
@@ -431,13 +434,13 @@ const submit = () => {
 };
 const generateProds = () => {
     state.prd.gimmick = {
-        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, price: "", description: "" }],
+        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, include_ppn: false, price: "", description: "" }],
     };
     state.prd.design = {
-        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, price: "", description: "" }],
+        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, include_ppn: false, price: "", description: "" }],
     };
     state.prd.printing = {
-        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, price: "", description: "" }],
+        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, include_ppn: false, price: "", description: "" }],
     };
     state.prd.payment = {
         products: [{ name: "", product_code: "", uom_code: null, tax_code: null, price: "", description: "" }],
@@ -500,8 +503,9 @@ onMounted(() => {
                                 // Map ID fields to code fields if they exist
                                 uom_code: product.uom_code || (product.unit_id ? product.unit_id : null),
                                 tax_code: product.tax_code || (product.tax_id ? product.tax_id : null),
+                                include_ppn: product.include_ppn || false,
                                 price: product.price || "",
-                                total_price: product.total_price || (product.quantity && product.price ? parseFloat(product.quantity) * calculatePriceWithTax(parseFloat(product.price), product.tax_code) : 0)
+                                total_price: product.total_price || (product.quantity && product.price ? parseFloat(product.quantity) * calculatePriceWithTax(parseFloat(product.price), product.tax_code, product.include_ppn || false) : 0)
                             };
                         }
                     });
@@ -1009,6 +1013,9 @@ async function loadUomAndTaxData() {
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Tax
                                 </th>
+                                <th class="text-left text-sm px-4 py-2 w-100px text-center">
+                                    Incl. PPN
+                                </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Price
                                 </th>
@@ -1182,6 +1189,20 @@ async function loadUomAndTaxData() {
                                         >
                                     </div>
                                 </td>
+                                <td class="text-center">
+                                    <div class="flex items-center justify-center h-full">
+                                        <label class="flex flex-col items-center gap-1 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                v-model="product.include_ppn"
+                                                class="w-4 h-4 accent-red-500 cursor-pointer"
+                                            />
+                                            <span class="text-xs" :class="product.include_ppn ? 'text-red-500 font-semibold' : 'text-gray-400'">
+                                                {{ product.include_ppn ? 'Yes' : 'No' }}
+                                            </span>
+                                        </label>
+                                    </div>
+                                </td>
                                 <td class="">
                                     <div
                                         class="flex items-center flex-col gap-1"
@@ -1218,7 +1239,7 @@ async function loadUomAndTaxData() {
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent flex items-center"
                                             placeholder="0"
                                         >
-                                            {{ product.quantity && product.price ? nom(Math.round(parseFloat(product.quantity) * calculatePriceWithTax(parseFloat(product.price), product.tax_code) * 100) / 100) : '0' }}
+                                            {{ product.quantity && product.price ? nom(Math.round(parseFloat(product.quantity) * calculatePriceWithTax(parseFloat(product.price), product.tax_code, product.include_ppn) * 100) / 100) : '0' }}
                                         </div>
                                     </div>
                                 </td>
@@ -1276,6 +1297,7 @@ async function loadUomAndTaxData() {
                                                         quantity: '',
                                                         uom_code: null,
                                                         tax_code: null,
+                                                        include_ppn: false,
                                                         price: '',
                                                         description: '',
                                                     }
@@ -1309,6 +1331,9 @@ async function loadUomAndTaxData() {
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Tax
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-100px text-center">
+                                    Incl. PPN
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Price
@@ -1483,6 +1508,20 @@ async function loadUomAndTaxData() {
                                         >
                                     </div>
                                 </td>
+                                <td class="text-center">
+                                    <div class="flex items-center justify-center h-full">
+                                        <label class="flex flex-col items-center gap-1 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                v-model="product.include_ppn"
+                                                class="w-4 h-4 accent-red-500 cursor-pointer"
+                                            />
+                                            <span class="text-xs" :class="product.include_ppn ? 'text-red-500 font-semibold' : 'text-gray-400'">
+                                                {{ product.include_ppn ? 'Yes' : 'No' }}
+                                            </span>
+                                        </label>
+                                    </div>
+                                </td>
                                 <td class="">
                                     <div
                                         class="flex items-center flex-col gap-1"
@@ -1519,7 +1558,7 @@ async function loadUomAndTaxData() {
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent flex items-center"
                                             placeholder="0"
                                         >
-                                            {{ product.quantity && product.price ? nom(Math.round(parseFloat(product.quantity) * calculatePriceWithTax(parseFloat(product.price), product.tax_code) * 100) / 100) : '0' }}
+                                            {{ product.quantity && product.price ? nom(Math.round(parseFloat(product.quantity) * calculatePriceWithTax(parseFloat(product.price), product.tax_code, product.include_ppn) * 100) / 100) : '0' }}
                                         </div>
                                     </div>
                                 </td>
@@ -1576,6 +1615,7 @@ async function loadUomAndTaxData() {
                                                     quantity: '',
                                                     uom_code: null,
                                                     tax_code: null,
+                                                    include_ppn: false,
                                                     price: '',
                                                     description: '',
                                                 })
@@ -1607,6 +1647,9 @@ async function loadUomAndTaxData() {
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Tax
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-100px text-center">
+                                    Incl. PPN
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Price
@@ -1781,6 +1824,20 @@ async function loadUomAndTaxData() {
                                         >
                                     </div>
                                 </td>
+                                <td class="text-center">
+                                    <div class="flex items-center justify-center h-full">
+                                        <label class="flex flex-col items-center gap-1 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                v-model="product.include_ppn"
+                                                class="w-4 h-4 accent-red-500 cursor-pointer"
+                                            />
+                                            <span class="text-xs" :class="product.include_ppn ? 'text-red-500 font-semibold' : 'text-gray-400'">
+                                                {{ product.include_ppn ? 'Yes' : 'No' }}
+                                            </span>
+                                        </label>
+                                    </div>
+                                </td>
                                 <td class="">
                                     <div
                                         class="flex items-center flex-col gap-1"
@@ -1817,7 +1874,7 @@ async function loadUomAndTaxData() {
                                             class="w-full h-40px pl-4 pr-1 text-sm bg-transparent flex items-center"
                                             placeholder="0"
                                         >
-                                            {{ product.quantity && product.price ? nom(Math.round(parseFloat(product.quantity) * calculatePriceWithTax(parseFloat(product.price), product.tax_code) * 100) / 100) : '0' }}
+                                            {{ product.quantity && product.price ? nom(Math.round(parseFloat(product.quantity) * calculatePriceWithTax(parseFloat(product.price), product.tax_code, product.include_ppn) * 100) / 100) : '0' }}
                                         </div>
                                     </div>
                                 </td>
@@ -1875,6 +1932,7 @@ async function loadUomAndTaxData() {
                                                         quantity: '',
                                                         uom_code: null,
                                                         tax_code: null,
+                                                        include_ppn: false,
                                                         price: '',
                                                         description: '',
                                                     }

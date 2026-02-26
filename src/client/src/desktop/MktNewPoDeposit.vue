@@ -115,7 +115,9 @@ const onProductSelect = (product, selectedData) => {
 };
 
 // Helper function to calculate price with tax
-const calculatePriceWithTax = (price, taxCode) => {
+// If includePpn is true, the entered price already includes tax — return as-is
+const calculatePriceWithTax = (price, taxCode, includePpn = false) => {
+    if (includePpn) return price;
     if (!taxCode) return price;
 
     // Find the tax object by code to get the percentage
@@ -142,7 +144,7 @@ const deleteSelectedGroup = () => {
     state.products_group = state.products_group.map((g) => {
         g.products = g.products.map((p) => {
             if (p.price != null && p.quantity != null) {
-                const priceWithTax = calculatePriceWithTax(parseFloat(p.price), p.tax_code);
+                const priceWithTax = calculatePriceWithTax(parseFloat(p.price), p.tax_code, p.include_ppn);
                 p.total_price = Math.round(parseFloat(p.quantity) * priceWithTax * 100) / 100;
             } else {
                 p.total_price = null;
@@ -159,7 +161,7 @@ const deleteSelectedGroup = () => {
     state.po_deposits = state.po_deposits.map((g) => {
         g.products = g.products.map((p) => {
             if (p.price != null && p.quantity != null) {
-                const priceWithTax = calculatePriceWithTax(parseFloat(p.price), p.tax_code);
+                const priceWithTax = calculatePriceWithTax(parseFloat(p.price), p.tax_code, p.include_ppn);
                 p.total_price = Math.round(parseFloat(p.quantity) * priceWithTax * 100) / 100;
             } else {
                 p.total_price = null;
@@ -352,7 +354,8 @@ const init = () => {
                                 ...product,
                                 // Map ID fields to code fields if they exist
                                 uom_code: product.uom_code || (product.unit_id ? product.unit_id : null),
-                                tax_code: product.tax_code || (product.tax_id ? product.tax_id : null)
+                                tax_code: product.tax_code || (product.tax_id ? product.tax_id : null),
+                                include_ppn: product.include_ppn || false,
                             })),
                         })),
                 ];
@@ -365,7 +368,8 @@ const init = () => {
                                 ...product,
                                 // Map ID fields to code fields if they exist
                                 uom_code: product.uom_code || (product.unit_id ? product.unit_id : null),
-                                tax_code: product.tax_code || (product.tax_id ? product.tax_id : null)
+                                tax_code: product.tax_code || (product.tax_id ? product.tax_id : null),
+                                include_ppn: product.include_ppn || false,
                             })),
                             client_po_date: dayjs(e.client_po_date).format(
                                 "YYYY-MM-DD"
@@ -430,6 +434,7 @@ const addNewGroup = (po_number) => {
                 is_production: true,
                 uom_code: null,
                 tax_code: null,
+                include_ppn: false,
             },
         ],
     });
@@ -686,6 +691,7 @@ const addNewDeposit = async (force = false) => {
                 total_price: null,
                 uom_code: null,
                 tax_code: null,
+                include_ppn: false,
             },
         ],
     });
@@ -706,7 +712,7 @@ watch(
             group.map((g) => {
                 g.products.map((p) => {
                     if (p.price != null && p.quantity != null) {
-                        const priceWithTax = calculatePriceWithTax(parseFloat(p.price), p.tax_code);
+                        const priceWithTax = calculatePriceWithTax(parseFloat(p.price), p.tax_code, p.include_ppn);
                         p.total_price = Math.round(parseFloat(p.quantity) * priceWithTax * 100) / 100;
                     } else {
                         p.total_price = null;
@@ -733,7 +739,7 @@ watch(
             group.forEach((g) => {
                 g.products.forEach((p) => {
                     if (p.price != null && p.quantity != null) {
-                        const priceWithTax = calculatePriceWithTax(parseFloat(p.price), p.tax_code);
+                        const priceWithTax = calculatePriceWithTax(parseFloat(p.price), p.tax_code, p.include_ppn);
                         p.total_price = Math.round(parseFloat(p.quantity) * priceWithTax * 100) / 100;
                     } else {
                         p.total_price = null;
@@ -1096,7 +1102,7 @@ watch(() => state.ppn_type, async () => {
                                         <thead class="bg-gray-100">
                                             <tr>
                                                 <td
-                                                    colspan="9"
+                                                    colspan="10"
                                                     class="bg-gray-50 border-b-2 pt-2"
                                                 >
                                                     <table
@@ -1342,6 +1348,11 @@ watch(() => state.ppn_type, async () => {
                                                     Tax
                                                 </th>
                                                 <th
+                                                    class="text-center text-sm px-1 py-2 w-80px"
+                                                >
+                                                    Incl. PPN
+                                                </th>
+                                                <th
                                                     class="text-left text-sm px-1 py-2 w-120px"
                                                 >
                                                     Price/Pcs
@@ -1513,6 +1524,20 @@ watch(() => state.ppn_type, async () => {
                                                         >
                                                     </div>
                                                 </td>
+                                                <td class="text-center">
+                                                    <div class="flex items-center justify-center h-full">
+                                                        <label class="flex flex-col items-center gap-1 cursor-pointer">
+                                                            <input
+                                                                type="checkbox"
+                                                                v-model="product.include_ppn"
+                                                                class="w-4 h-4 accent-red-500 cursor-pointer"
+                                                            />
+                                                            <span class="text-xs" :class="product.include_ppn ? 'text-red-500 font-semibold' : 'text-gray-400'">
+                                                                {{ product.include_ppn ? 'Yes' : 'No' }}
+                                                            </span>
+                                                        </label>
+                                                    </div>
+                                                </td>
                                                 <td class="">
                                                     <div
                                                         class="flex items-center flex-col gap-1"
@@ -1670,7 +1695,7 @@ watch(() => state.ppn_type, async () => {
                                         </tbody>
                                         <tfoot>
                                             <tr v-if="state.status == 'open'">
-                                                <td colspan="9">
+                                                <td colspan="10">
                                                     <div class="flex border-t">
                                                         <button
                                                             type="button"
@@ -1690,6 +1715,7 @@ watch(() => state.ppn_type, async () => {
                                                                             is_production: true,
                                                                             uom_code: null,
                                                                             tax_code: null,
+                                                                            include_ppn: false,
                                                                         }
                                                                     )
                                                             "
@@ -1742,7 +1768,7 @@ watch(() => state.ppn_type, async () => {
                                             <thead class="bg-gray-100">
                                                 <tr>
                                                     <td
-                                                        colspan="9"
+                                                        colspan="10"
                                                         class="bg-gray-50 border-b-2 pt-2"
                                                     >
                                                         <table
@@ -1918,6 +1944,11 @@ watch(() => state.ppn_type, async () => {
                                                         class="text-left text-sm px-1 py-2 w-120px"
                                                     >
                                                         Tax
+                                                    </th>
+                                                    <th
+                                                        class="text-center text-sm px-1 py-2 w-80px"
+                                                    >
+                                                        Incl. PPN
                                                     </th>
                                                     <th
                                                         class="text-left text-sm px-1 py-2 w-120px"
@@ -2097,6 +2128,20 @@ watch(() => state.ppn_type, async () => {
                                                                     ][0]
                                                                 }}</span
                                                             >
+                                                        </div>
+                                                    </td>
+                                                    <td class="text-center">
+                                                        <div class="flex items-center justify-center h-full">
+                                                            <label class="flex flex-col items-center gap-1 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    v-model="product.include_ppn"
+                                                                    class="w-4 h-4 accent-red-500 cursor-pointer"
+                                                                />
+                                                                <span class="text-xs" :class="product.include_ppn ? 'text-red-500 font-semibold' : 'text-gray-400'">
+                                                                    {{ product.include_ppn ? 'Yes' : 'No' }}
+                                                                </span>
+                                                            </label>
                                                         </div>
                                                     </td>
                                                     <td class="">
@@ -2288,7 +2333,7 @@ watch(() => state.ppn_type, async () => {
                                                             'finance'
                                                     "
                                                 >
-                                                    <td colspan="9">
+                                                    <td colspan="10">
                                                         <div
                                                             class="flex border-t"
                                                         >
@@ -2312,6 +2357,7 @@ watch(() => state.ppn_type, async () => {
                                                                                 is_production: true,
                                                                                 uom_code: null,
                                                                                 tax_code: null,
+                                                                                include_ppn: false,
                                                                             }
                                                                         )
                                                                 "

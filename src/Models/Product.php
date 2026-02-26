@@ -26,13 +26,15 @@ class Product extends Model
         'design_files',
         'design_approved',
         'uom_code',
-        'tax_code'
+        'tax_code',
+        'include_ppn'
     ];
 
     protected $casts = [
         'id' => 'integer',
         'project' => 'integer',
         'is_production' => 'boolean',
+        'include_ppn' => 'boolean',
         'uom_code' => 'string',
         'tax_code' => 'string',
         'price' => 'decimal:2',
