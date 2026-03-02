@@ -13,7 +13,11 @@ return new class extends Migration
     {
         if (!Schema::hasColumn('products', 'include_ppn')) {
             Schema::table('products', function (Blueprint $table) {
-                $table->boolean('include_ppn')->default(false)->after('tax_code');
+                $column = $table->boolean('include_ppn')->default(false);
+                // Only use after() if tax_code column exists
+                if (Schema::hasColumn('products', 'tax_code')) {
+                    $column->after('tax_code');
+                }
             });
         }
     }

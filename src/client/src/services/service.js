@@ -5,7 +5,7 @@ import { reactive, ref } from "vue";
 const DEFAULT_COMPANY_ID = 12; // Change this to your default company ID
 
 // export const URLL = "";
-export const URLL = "http://localhost:8000";
+// export const URLL = "http://localhost:8000";
 // export const URLL = "https://inventory.dotcomsolution.co.id";
 export const APIURL = URLL + "/api";
 export const ASSETSURL = URLL + "/storage/";
