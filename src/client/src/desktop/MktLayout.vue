@@ -225,7 +225,7 @@ const menus = [
         title: "Sync Monitoring",
         activeon: "desktopsync-monitoring",
         link: "/desktop/sync-monitoring",
-        roles: ["admin", "finance"],
+        roles: ["admin", "finance", "marketing", "delivery", "design"],
     },
     {
         icon: "ri-money-dollar-circle-fill",

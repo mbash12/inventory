@@ -648,7 +648,7 @@ const desktopRoutes = {
             name: "Sync Monitoring",
             meta: {
                 requiresAuth: true,
-                roles: ["admin", "finance"],
+                roles: ["admin", "finance", "marketing", "delivery", "design"],
             },
         },
         {
