@@ -66,6 +66,45 @@ class ProjectSyncController extends Controller
     }
 
     /**
+     * Get list of PO Deposits available for manual sync
+     * (those that have client_code but have not been successfully synced yet)
+     */
+    public function availablePoDeposits(Request $request)
+    {
+        $search = $request->input('search');
+        
+        $query = PoDeposit::whereNotNull('client_code')
+            ->where(function($q) {
+                $q->whereNull('sync_status')
+                  ->orWhere('sync_status', 'failed');
+            });
+
+        if ($search) {
+            $query->where(function($q) use ($search) {
+                $q->where('job_number', 'like', "%{$search}%")
+                  ->orWhere('client_company', 'like', "%{$search}%");
+            });
+        }
+
+        $poDeposits = $query->orderBy('job_number', 'asc')
+            ->limit(50)
+            ->get();
+
+        return response()->json([
+            'code' => 200,
+            'data' => $poDeposits->map(function($pd) {
+                return [
+                    'id' => $pd->id,
+                    'job_number' => $pd->job_number,
+                    'client_company' => $pd->client_company,
+                    'client_code' => $pd->client_code,
+                    'sync_status' => $pd->sync_status,
+                ];
+            })
+        ]);
+    }
+
+    /**
      * Immediate retry for failed sync (no queue, runs immediately)
      */
     public function retrySync($poDepositId, Request $request)

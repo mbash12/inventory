@@ -165,25 +165,27 @@ onUnmounted(() => {
                 <i class="ri-arrow-down-s-line"></i>
             </div>
         </div>
-        <div
-            class="fixed max-h-300px bg-white z-[9999] shadow-lg rounded border overflow-auto flex flex-col"
-            v-if="state.focus"
-            :style="dropdownStyle"
-        >
+        <Teleport to="body">
             <div
-                class="w-full py-2 px-4 text-sm hover:bg-gray-50 bg-white cursor-pointer"
-                v-if="state.list.length > 0"
-                v-for="(item, i) in state.list"
-                :key="item.code"
-                @mousedown="onSelect(item)"
+                class="fixed max-h-300px bg-white z-[99999] shadow-lg rounded border overflow-auto flex flex-col"
+                v-if="state.focus"
+                :style="dropdownStyle"
             >
-                <div class="font-medium">{{ item.label }}</div>
-                <div class="text-xs text-gray-500">{{ item.code }} - Rp {{ item.selling_price?.toLocaleString() || 0 }}</div>
+                <div
+                    class="w-full py-2 px-4 text-sm hover:bg-gray-50 bg-white cursor-pointer"
+                    v-if="state.list.length > 0"
+                    v-for="(item, i) in state.list"
+                    :key="item.code"
+                    @mousedown="onSelect(item)"
+                >
+                    <div class="font-medium">{{ item.label }}</div>
+                    <div class="text-xs text-gray-500">{{ item.code }} - Rp {{ item.selling_price?.toLocaleString() || 0 }}</div>
+                </div>
+                <div class="w-full py-2 px-4 text-sm text-center text-gray-500" v-else>
+                    No products found
+                </div>
             </div>
-            <div class="w-full py-2 px-4 text-sm text-center text-gray-500" v-else>
-                No products found
-            </div>
-        </div>
+        </Teleport>
         <input type="text" required v-if="required == 'true' && value == null" name="hidden" class="opacity-0 h-1px w-full"/>
     </div>
 </template>

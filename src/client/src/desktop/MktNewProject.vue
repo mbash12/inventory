@@ -197,6 +197,13 @@ const submit = () => {
     const validateProducts = () => {
         // Reset errors before validation
         state.errors = {};
+        let hasError = false;
+
+        // Validate client_code (must re-select company if code is empty)
+        if (!state.client_code) {
+            state.errors.client_company = ['Client code is missing. Please re-select the client company.'];
+            hasError = true;
+        }
 
         const productGroups = [
             { name: 'gimmick', products: state.prd.gimmick?.products || [] },
@@ -212,8 +219,6 @@ const submit = () => {
                 productIndices[product] = { group: group.name, index: index };
             });
         });
-
-        let hasError = false;
 
         productGroups.forEach(group => {
             group.products.forEach((product, i) => {
@@ -245,6 +250,11 @@ const submit = () => {
 
                         if (!product.tax_code) {
                             state.errors[`${errorKey}.tax_code`] = ['Tax is required'];
+                            hasError = true;
+                        }
+
+                        if (!product.product_code) {
+                            state.errors[`${errorKey}.product_code`] = ['Product Code is required'];
                             hasError = true;
                         }
                     }

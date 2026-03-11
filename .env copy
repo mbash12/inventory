@@ -11,21 +11,36 @@ LOG_LEVEL=debug
 # DB_CONNECTION=mysql
 # DB_HOST=172.17.0.1
 # DB_PORT=3306
-# DB_DATABASE=pelangi_inventory
+# DB_DATABASE=pelangi_inventory_1
 # DB_USERNAME=root
 # DB_PASSWORD=pelangi123
 
 DB_CONNECTION=mysql
-DB_HOST=localhost
+DB_HOST=127.0.0.1
 DB_PORT=3306
-DB_DATABASE=pelangi_inventory
+DB_DATABASE=inv3
 DB_USERNAME=demo
 DB_PASSWORD=demo
+
+
+# DB_HOST=172.17.0.1
+# DB_PORT=3306
+# DB_DATABASE=inventory_dev
+# DB_USERNAME=mmcapp
+# DB_PASSWORD="93CBX2MrMf.k-moU"
+
+
+# DB_CONNECTION=mysql
+# DB_HOST=localhost
+# DB_PORT=3306
+# DB_DATABASE=pelangi4_inventory
+# DB_USERNAME=pelangi4_inventory
+# DB_PASSWORD="*lWY#P$9E0ON"
 
 BROADCAST_DRIVER=log
 CACHE_DRIVER=file
 FILESYSTEM_DISK=local
-QUEUE_CONNECTION=sync
+QUEUE_CONNECTION=database
 SESSION_DRIVER=file
 SESSION_LIFETIME=120
 
@@ -65,3 +80,16 @@ VITE_PUSHER_SCHEME="${PUSHER_SCHEME}"
 VITE_PUSHER_APP_CLUSTER="${PUSHER_APP_CLUSTER}"
 
 JWT_SECRET=mec6b8T5nFZVsH00BX80MRB263b61HqxdeJDsyK5YgTzfIEstLONZ8BAy3VCIXMd
+
+
+# Accounting Integration
+ACCOUNTING_API_URL=https://accounting-dev.dotcomsolution.co.id/api
+# ACCOUNTING_API_URL=http://localhost:8001/api
+EPROC_INTEGRATION_BEARER="abkVuP31xSewjLNZTUZDtJ5OFtFQVoEsRFWHXcVIwmZ1gKc9sa"
+DEFAULT_COMPANY_ID=12
+PPN_COMPANY_ID=12
+NON_PPN_COMPANY_ID=1
+PROJECT_SYNC_QUEUE=default
+
+# Set to true to disable automatic sync on project/po_deposit UPDATE (create still syncs)
+PROJECT_SYNC_DISABLED=false

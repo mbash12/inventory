@@ -315,6 +315,17 @@ const submit = () => {
                                                 accept="image/*"
                                             />
                                         </div>
+                                        <div class="w-80px h-80px flex-shrink-0 relative border rounded flex flex-col items-center justify-center">
+                                            <i class="ri-camera-line text-2xl"></i>
+                                            <span class="text-xs text-blue-gray-400">Capture</span>
+                                            <input
+                                                type="file"
+                                                class="w-full h-full opacity-0 absolute inset-0"
+                                                @input="uploadFile"
+                                                accept="image/*"
+                                                capture="environment"
+                                            />
+                                        </div>
                                         <div class="flex items-center w-80px h-80px  flex-shrink-0 rounded border relative" v-for="(file, i) in state?.do_files" @click="state.viewFile = file">
                                             <img :src="ASSETSURL + file" alt="" class="w-full h-full" >
                                             <i class="ri-close-circle-fill text-red-500 text-3xl absolute -top-2 w-28px h-28px block flex items-center justify-center -right-2" @click.stop="removeFile(i)"></i>

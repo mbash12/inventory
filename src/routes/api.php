@@ -207,6 +207,9 @@ Route::prefix('sync')->group(function () {
     // List all PO Deposits with sync status (monitoring page)
     Route::get('/po-deposits', [ProjectSyncController::class, 'index']);
 
+    // Get list of PO Deposits available to be added to sync (those not yet synced or with null status)
+    Route::get('/available-po-deposits', [ProjectSyncController::class, 'availablePoDeposits']);
+
     // Get sync status for specific PO Deposit
     Route::get('/po-deposits/{poDepositId}', [ProjectSyncController::class, 'status']);
 

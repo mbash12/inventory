@@ -16,7 +16,7 @@ class ProductObserver
     private const DEBOUNCE_PREFIX = 'project_sync_debounce:';
     
     /**
-     * Debounce time in seconds
+     * Devounce time in seconds
      */
     private const DEBOUNCE_SECONDS = 30;
 
@@ -116,6 +116,19 @@ class ProductObserver
             Log::debug('ProductObserver: No PoDeposit found, skipping sync', [
                 'product_id' => $product->id,
                 'project_id' => $project->id,
+                'event' => $event,
+            ]);
+            return;
+        }
+
+        // Only sync if never synced before (last_synced_at is null)
+        // This brings back sync for edit but only for new/unsynced data
+        if ($poDeposit->last_synced_at !== null) {
+            Log::debug('ProductObserver: Skipping sync - already synced before', [
+                'product_id' => $product->id,
+                'project_id' => $project->id,
+                'po_deposit_id' => $poDeposit->id,
+                'last_synced_at' => $poDeposit->last_synced_at,
                 'event' => $event,
             ]);
             return;

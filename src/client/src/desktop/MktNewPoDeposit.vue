@@ -208,6 +208,13 @@ const submit = () => {
             return;
         }
     }
+
+    // Validate client_code (must re-select company if code is empty)
+    if (!state.client_code) {
+        state.errors.client_company = ['Client code is missing. Please re-select the client company.'];
+        alertShowFailed.value = true;
+        return;
+    }
     
     // Validate all products before submitting (all deposits and actual products)
     if (!validateAllProducts(null, true)) {
@@ -494,6 +501,11 @@ const validateAllProducts = (specificDepositIndex = null, showAlert = true) => {
                     hasError = true;
                 }
 
+                if (!product.product_code) {
+                    state.errors[`${errorKey}.product_code`] = ['Product Code is required'];
+                    hasError = true;
+                }
+
             }
         });
     });
@@ -524,6 +536,11 @@ const validateAllProducts = (specificDepositIndex = null, showAlert = true) => {
 
                     if (!product.tax_code) {
                         state.errors[`${errorKey}.tax_code`] = ['Tax is required'];
+                        hasError = true;
+                    }
+
+                    if (!product.product_code) {
+                        state.errors[`${errorKey}.product_code`] = ['Product Code is required'];
                         hasError = true;
                     }
                 }
@@ -2071,7 +2088,6 @@ watch(() => state.ppn_type, async () => {
                                                             <select
                                                                 class="w-full h-40px px-1 text-sm bg-transparent border-none"
                                                                 v-model="product.uom_code"
-                                                                disabled
                                                             >
                                                                 <option value="">Select UOM</option>
                                                                 <option
@@ -2104,7 +2120,6 @@ watch(() => state.ppn_type, async () => {
                                                             <select
                                                                 class="w-full h-40px px-1 text-sm bg-transparent border-none"
                                                                 v-model="product.tax_code"
-                                                                disabled
                                                             >
                                                                 <option value="">Select Tax</option>
                                                                 <option

@@ -87,6 +87,18 @@ class ProjectObserver
             return;
         }
 
+        // Only sync if never synced before (last_synced_at is null)
+        // This brings back sync for edit but only for new/unsynced data
+        if ($poDeposit->last_synced_at !== null) {
+            Log::debug('ProjectObserver: Skipping sync - already synced before', [
+                'project_id' => $project->id,
+                'po_deposit_id' => $poDeposit->id,
+                'last_synced_at' => $poDeposit->last_synced_at,
+                'event' => $event,
+            ]);
+            return;
+        }
+
         // Only sync if there's a client_code (required for accounting sync)
         if (empty($poDeposit->client_code)) {
             Log::debug('ProjectObserver: PoDeposit has no client_code, skipping sync', [

@@ -140,18 +140,22 @@ class DeliveryController extends Controller
             ]);
         }
         try {
+            DB::beginTransaction();
             $delivery = Delivery::findOrFail($id);
             $existingItems = $delivery->delivery_items_data()->get();
-            $existingInventories = Inventory::get();
             $alldelivery_items_dataDelivered = true;
+            
             foreach ($request->delivery_items as $childData) {
                 if (isset($childData['id'])) {
                     $existingItem = $existingItems->where('id', $childData['id'])->first();
                     if ($existingItem) {
+                        // Case: Marking as delivered
                         if ($existingItem['delivered_at'] === null && $childData['delivered_at'] !== null) {
-                            $inv_org = $existingInventories->where('warehouse', $childData['origin'])
+                            $inv_org = Inventory::where('warehouse', $childData['origin'])
+                                ->where('project', $delivery->project)
                                 ->where('product', $childData['product'])->first();
-                            $inv_dst = $existingInventories->where('warehouse', $childData['destination'])
+                            $inv_dst = Inventory::where('warehouse', $childData['destination'])
+                                ->where('project', $delivery->project)
                                 ->where('product', $childData['product'])->first();
 
                             if ($inv_org) {
@@ -174,6 +178,22 @@ class DeliveryController extends Controller
                                 ]);
                             }
                         }
+                        // Case: Unmarking as delivered
+                        elseif ($existingItem['delivered_at'] !== null && $childData['delivered_at'] === null) {
+                            $inv_org = Inventory::where('warehouse', $existingItem->origin)
+                                ->where('project', $delivery->project)
+                                ->where('product', $existingItem->product)->first();
+                            $inv_dst = Inventory::where('warehouse', $existingItem->destination)
+                                ->where('project', $delivery->project)
+                                ->where('product', $existingItem->product)->first();
+
+                            if ($inv_org) {
+                                $inv_org->update(['quantity' => $inv_org->quantity + $existingItem->actual_quantity]);
+                            }
+                            if ($inv_dst) {
+                                $inv_dst->update(['quantity' => $inv_dst->quantity - $existingItem->actual_quantity]);
+                            }
+                        }
 
                         $existingItem->update($childData);
 
@@ -183,20 +203,40 @@ class DeliveryController extends Controller
                     }
                 } else {
                     $delivery->delivery_items_data()->create($childData);
+                    $alldelivery_items_dataDelivered = false;
                 }
             }
 
             $missingChildren = $existingItems->whereNotIn('id', collect($request->delivery_items)->pluck('id'));
             foreach ($missingChildren as $missingChild) {
+                // If the item being deleted was delivered, revert inventory
+                if ($missingChild->delivered_at !== null) {
+                    $inv_org = Inventory::where('warehouse', $missingChild->origin)
+                        ->where('project', $delivery->project)
+                        ->where('product', $missingChild->product)->first();
+                    $inv_dst = Inventory::where('warehouse', $missingChild->destination)
+                        ->where('project', $delivery->project)
+                        ->where('product', $missingChild->product)->first();
+
+                    if ($inv_org) {
+                        $inv_org->update(['quantity' => $inv_org->quantity + $missingChild->actual_quantity]);
+                    }
+                    if ($inv_dst) {
+                        $inv_dst->update(['quantity' => $inv_dst->quantity - $missingChild->actual_quantity]);
+                    }
+                }
                 $missingChild->delete();
             }
 
             $del_status = $delivery['status'];
-            if ($alldelivery_items_dataDelivered) {
+            if ($alldelivery_items_dataDelivered && $delivery->delivery_items_data()->exists()) {
                 $del_status = 'delivered';
             } elseif ($delivery->delivery_items_data()->whereNotNull('delivered_at')->exists()) {
                 $del_status = 'partial';
+            } else {
+                $del_status = 'ready';
             }
+
             $delivery->update([
                 "project" => $request->project,
                 "default_origin" => $request->default_origin,
@@ -210,43 +250,100 @@ class DeliveryController extends Controller
                 "status" => $del_status
             ]);
 
-            $inventoriesWithWarehouse2 = $existingInventories->where('warehouse', 2)->where('project', $delivery['project']);
-            $projectDelivered = true;
+            // Re-evaluate project status
+            $this->updateProjectStatus($delivery->project);
 
-            foreach ($inventoriesWithWarehouse2 as $inventory) {
-                $product = Product::find($inventory->product);
-                if ($inventory->quantity < $product->quantity) {
-                    $projectDelivered = false;
-                    break;
-                }
-            }
-
-            $project = Project::find($delivery['project']);
-
-            if ($projectDelivered) {
-                $project->update(["status" => "delivered"]);
-                notify('Project Delivered', 'Project #' . $project['job_number'] . ' PO #' . $project['client_po_number'], 'marketing', json_encode(["project" => $project]), "delivery");
-            } elseif ($project->deliveries_data()->where('status', 'delivered')->where('destination', 2)->exists()) {
-                $project->update(["status" => "partial"]);
-                notify('Project Partial Delivered', 'Project #' . $project['job_number'] . ' PO #' . $project['client_po_number'], 'marketing', json_encode(["project" => $project]), "delivery");
-            }
-
-            return response()->json(['code' => 200, 'debg' => ['inv' => $inventoriesWithWarehouse2, 'del' => $projectDelivered]]);
+            DB::commit();
+            return response()->json(['code' => 200]);
         } catch (\Throwable $th) {
+            DB::rollBack();
             return response()->json([
                 'code' => 422,
-                'errors' => $th
+                'errors' => $th->getMessage()
             ]);
         }
     }
+
     public function destroy($id, Request $request)
     {
         try {
-            $item = Delivery::findOrFail($id);
-            $item->delete();
+            DB::beginTransaction();
+            $delivery = Delivery::with('delivery_items_data')->findOrFail($id);
+            $projectId = $delivery->project;
+
+            // Revert inventory for delivered items
+            foreach ($delivery->delivery_items_data as $item) {
+                if ($item->delivered_at !== null) {
+                    $inv_org = Inventory::where('warehouse', $item->origin)
+                        ->where('project', $projectId)
+                        ->where('product', $item->product)->first();
+                    $inv_dst = Inventory::where('warehouse', $item->destination)
+                        ->where('project', $projectId)
+                        ->where('product', $item->product)->first();
+
+                    if ($inv_org) {
+                        $inv_org->update(['quantity' => $inv_org->quantity + $item->actual_quantity]);
+                    }
+                    if ($inv_dst) {
+                        $inv_dst->update(['quantity' => $inv_dst->quantity - $item->actual_quantity]);
+                    }
+                }
+            }
+
+            $delivery->delete();
+
+            // Re-evaluate project status
+            $this->updateProjectStatus($projectId);
+
+            DB::commit();
             return response()->json(['code' => 200]);
         } catch (ModelNotFoundException $e) {
+            DB::rollBack();
             return response()->json(['code' => 404, 'data' => []]);
+        } catch (\Throwable $th) {
+            DB::rollBack();
+            return response()->json([
+                'code' => 422,
+                'errors' => $th->getMessage()
+            ]);
+        }
+    }
+
+    private function updateProjectStatus($projectId)
+    {
+        $project = Project::find($projectId);
+        if (!$project) return;
+
+        $products = Product::where('project', $projectId)->get();
+        $projectDelivered = $products->isNotEmpty();
+        
+        foreach ($products as $product) {
+            $inventory = Inventory::where('project', $projectId)
+                ->where('warehouse', 2)
+                ->where('product', $product->id)
+                ->first();
+            
+            if (!$inventory || $inventory->quantity < $product->quantity) {
+                $projectDelivered = false;
+                break;
+            }
+        }
+
+        if ($projectDelivered) {
+            $project->update(["status" => "delivered"]);
+            notify('Project Delivered', 'Project #' . $project['job_number'] . ' PO #' . $project['client_po_number'], 'marketing', json_encode(["project" => $project]), "delivery");
+        } elseif ($project->deliveries_data()->where('status', 'delivered')->where('destination', 2)->exists()) {
+            $project->update(["status" => "partial"]);
+            notify('Project Partial Delivered', 'Project #' . $project['job_number'] . ' PO #' . $project['client_po_number'], 'marketing', json_encode(["project" => $project]), "delivery");
+        } else {
+            // Check if there are any deliveries at all
+            if ($project->deliveries_data()->exists()) {
+                $project->update(["status" => "ready"]);
+            } else {
+                // If no deliveries, might still be 'ready' or 'production' or 'new'
+                // For now, defaulting back to 'ready' if it was already in delivery flow
+                $project->update(["status" => "ready"]);
+            }
         }
     }
     public function inventories($id, Request $request)

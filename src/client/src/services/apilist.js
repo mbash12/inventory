@@ -387,6 +387,11 @@ export const apilist = {
         url:"/sync/jobs/clear-data",
         auth:true,
         method:'DELETE'
+    },
+    getAvailablePoDeposits:{
+        url:"/sync/available-po-deposits",
+        auth:true,
+        method:'GET'
     }
 
 }

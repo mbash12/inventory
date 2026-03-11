@@ -269,7 +269,7 @@ const submit = () => {
                             >Foto Surat Jalan</span
                         >
                     </div>
-                    <div class="flex gap-2  w-full p-2 border-b">
+                    <div class="flex gap-2 overflow-x-auto w-full p-2 border-b">
                         <div
                             class="w-80px h-80px flex-shrink-0 relative border rounded flex flex-col items-center justify-center"
                             v-if="state.edit || state.data?.status != 'delivered'"
@@ -286,6 +286,22 @@ const submit = () => {
                             />
                         </div>
                         <div
+                            class="w-80px h-80px flex-shrink-0 relative border rounded flex flex-col items-center justify-center"
+                            v-if="state.edit || state.data?.status != 'delivered'"
+                        >
+                            <i class="ri-camera-line text-2xl"></i>
+                            <span class="text-xs text-blue-gray-400"
+                                >Capture</span
+                            >
+                            <input
+                                type="file"
+                                class="w-full h-full opacity-0 absolute inset-0"
+                                @input="uploadFile('do_files', $event)"
+                                accept="image/*"
+                                capture="environment"
+                            />
+                        </div>
+                        <div
                             class="flex items-center w-80px h-80px flex-shrink-0 rounded border relative"
                             v-for="(file, i) in state?.do_files"
                             @click="state.viewFile = file"
@@ -298,7 +314,7 @@ const submit = () => {
                             <i
                                 class="ri-close-circle-fill text-red-500 text-3xl absolute -top-2 w-28px h-28px block flex items-center justify-center -right-2"
                                 v-if="state.edit"
-                                @click.stop="removeFile(i)"
+                                @click.stop="removeFile('do_files', i)"
                             ></i>
                         </div>
                     </div>
@@ -312,7 +328,7 @@ const submit = () => {
                             >Foto Barang Diterima</span
                         >
                     </div>
-                    <div class="flex gap-2  w-full p-2 border-b">
+                    <div class="flex gap-2 overflow-x-auto w-full p-2 border-b">
                         <div
                             class="w-80px h-80px flex-shrink-0 relative border rounded flex flex-col items-center justify-center"
                             v-if="state.edit || state.data?.status != 'delivered'"
@@ -329,6 +345,22 @@ const submit = () => {
                             />
                         </div>
                         <div
+                            class="w-80px h-80px flex-shrink-0 relative border rounded flex flex-col items-center justify-center"
+                            v-if="state.edit || state.data?.status != 'delivered'"
+                        >
+                            <i class="ri-camera-line text-2xl"></i>
+                            <span class="text-xs text-blue-gray-400"
+                                >Capture</span
+                            >
+                            <input
+                                type="file"
+                                class="w-full h-full opacity-0 absolute inset-0"
+                                @input="uploadFile('receipt_files', $event)"
+                                accept="image/*"
+                                capture="environment"
+                            />
+                        </div>
+                        <div
                             class="flex items-center w-80px h-80px flex-shrink-0 rounded border relative"
                             v-for="(file, i) in state?.receipt_files"
                             @click="state.viewFile = file"
@@ -341,7 +373,7 @@ const submit = () => {
                             <i
                                 class="ri-close-circle-fill text-red-500 text-3xl absolute -top-2 w-28px h-28px block flex items-center justify-center -right-2"
                                 v-if="state.edit"
-                                @click.stop="removeFile(i)"
+                                @click.stop="removeFile('receipt_files', i)"
                             ></i>
                         </div>
                     </div>

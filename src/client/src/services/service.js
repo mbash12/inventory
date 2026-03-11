@@ -5,7 +5,7 @@ import { reactive, ref } from "vue";
 const DEFAULT_COMPANY_ID = 12; // Change this to your default company ID
 
 // export const URLL = "";
-// export const URLL = "http://localhost:8000";
+export const URLL = "http://10.10.1.84:8000";
 // export const URLL = "https://inventory.dotcomsolution.co.id";
 export const APIURL = URLL + "/api";
 export const ASSETSURL = URLL + "/storage/";
@@ -278,3 +278,4 @@ export const getSyncPoDeposits = async (filters) => await api("getSyncPoDeposits
 export const getSyncPoDepositStatus = async (id) => await api("getSyncPoDepositStatus", { route: "/" + id });
 export const retrySyncPoDeposit = async (id) => await api("retrySyncPoDeposit", { route: "/" + id + "/retry" });
 export const clearSyncData = async (data) => await api("clearSyncData", { body: data });
+export const getAvailablePoDeposits = async (filters) => await api("getAvailablePoDeposits", { params: filters });
