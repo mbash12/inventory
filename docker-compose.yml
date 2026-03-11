@@ -1,18 +1,19 @@
-name: inventory_app_dev
+name: inventory_app
 
 services:
   app:
     image: 2b88981b5ce9
     restart: always
-    container_name: inventory_app_dev
+    container_name: inventory_app
     volumes:
       - .:/var/www/html
     ports:
-      - "9009:80"
+      - "9001:80"
+
       
   node:
       image: node:20
-      container_name: inventory_node
+      container_name: inventory_node_prod
       working_dir: /var/www/html/src/client
       volumes:
         - .:/var/www/html
