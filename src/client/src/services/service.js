@@ -4,8 +4,8 @@ import { reactive, ref } from "vue";
 // Constants for accounting integration - Easy to update
 const DEFAULT_COMPANY_ID = 12; // Change this to your default company ID
 
-// export const URLL = "";
-export const URLL = "http://10.10.1.84:8000";
+export const URLL = "";
+// export const URLL = "http://10.10.1.84:8000";
 // export const URLL = "https://inventory.dotcomsolution.co.id";
 export const APIURL = URLL + "/api";
 export const ASSETSURL = URLL + "/storage/";
