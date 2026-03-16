@@ -201,6 +201,9 @@ class ProjectSyncService
         $totalTax = 0;
 
         foreach ($projects as $project) {
+            $projectType = strtolower($project->project_type ?? '');
+            $isProduction = in_array($projectType, ['design', 'payment', 'supplier payment', 'supplier_payment']);
+
             foreach ($project->products_data as $product) {
                 $itemTotal = ($product->quantity ?? 0) * ($product->price ?? 0);
                 $taxAmount = $this->calculateTax($product);
@@ -221,6 +224,7 @@ class ProjectSyncService
                     'uom_code' => $product->uom_code,
                     'tax_id' => null,
                     'tax_code' => $product->tax_code,
+                    'is_production' => $isProduction, // Derived from project_type, not the stored product field
                     'source_project_id' => $project->id,
                     'source_product_id' => $product->id,
                     'project_type' => $project->project_type, // For product category mapping
@@ -513,6 +517,9 @@ class ProjectSyncService
     {
         $items = [];
 
+        $projectType = strtolower($project->project_type ?? '');
+        $isProduction = in_array($projectType, ['design', 'payment', 'supplier payment', 'supplier_payment']);
+
         foreach ($project->products_data as $product) {
             $itemTotal = ($product->quantity ?? 0) * ($product->price ?? 0);
             $taxAmount = $this->calculateTax($product);
@@ -533,6 +540,7 @@ class ProjectSyncService
                 'uom_code' => $product->uom_code,
                 'tax_id' => null,
                 'tax_code' => $product->tax_code,
+                'is_production' => $isProduction, // Derived from project_type, not the stored product field
                 'source_project_id' => $project->id,
                 'source_product_id' => $product->id,
                 'project_type' => $project->project_type,
