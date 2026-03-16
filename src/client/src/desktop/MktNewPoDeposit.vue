@@ -225,7 +225,8 @@ const submit = () => {
 
     // Process products to include UOM and Tax codes
     const actual = state.products_group.map((g) => {
-        const isProduction = ['design', 'payment'].includes(g.project_type);
+        // Service types (design, payment) are NOT production items
+        const isProduction = !['design', 'payment', 'supplier payment'].includes(g.project_type);
         return {
             ...g,
             documents: state.documents,

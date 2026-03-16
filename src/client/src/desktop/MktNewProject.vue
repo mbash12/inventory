@@ -356,7 +356,8 @@ const submit = () => {
     // Process products to include UOM and Tax codes
     products.forEach(productGroup => {
         if (productGroup.products) {
-            const isProduction = ['design', 'payment'].includes(productGroup.project_type);
+            // Service types (design, payment) are NOT production items
+            const isProduction = !['design', 'payment', 'supplier payment'].includes(productGroup.project_type);
             productGroup.products = productGroup.products.map(product => {
                 // Only include product if it has a name
                 if (product.name && product.name.trim() !== '') {

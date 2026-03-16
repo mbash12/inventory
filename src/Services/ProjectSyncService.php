@@ -202,7 +202,8 @@ class ProjectSyncService
 
         foreach ($projects as $project) {
             $projectType = strtolower($project->project_type ?? '');
-            $isProduction = in_array($projectType, ['design', 'payment', 'supplier payment', 'supplier_payment']);
+            // Service types (design, payment) are NOT production items
+            $isProduction = !in_array($projectType, ['design', 'payment', 'supplier payment', 'supplier_payment']);
 
             foreach ($project->products_data as $product) {
                 $itemTotal = ($product->quantity ?? 0) * ($product->price ?? 0);
