@@ -225,8 +225,6 @@ const submit = () => {
 
     // Process products to include UOM and Tax codes
     const actual = state.products_group.map((g) => {
-        // Service types (design, payment) are NOT production items
-        const isProduction = !['design', 'payment', 'supplier payment'].includes(g.project_type);
         return {
             ...g,
             documents: state.documents,
@@ -236,7 +234,8 @@ const submit = () => {
                     // Include UOM and Tax codes if they exist
                     uom_code: product.uom_code || null,
                     tax_code: product.tax_code || null,
-                    is_production: isProduction,
+                    // Use user selected is_production value, default based on project type if undefined
+                    is_production: product.is_production !== undefined ? product.is_production : !['design', 'payment', 'supplier payment'].includes(g.project_type),
                 };
             })
         };
@@ -251,7 +250,9 @@ const submit = () => {
                     ...product,
                     // Include UOM and Tax codes if they exist
                     uom_code: product.uom_code || null,
-                    tax_code: product.tax_code || null
+                    tax_code: product.tax_code || null,
+                    // Default to false for non-actual/deposits if not set
+                    is_production: product.is_production !== undefined ? product.is_production : false,
                 };
             })
         };
@@ -366,6 +367,7 @@ const init = () => {
                                 uom_code: product.uom_code || (product.unit_id ? product.unit_id : null),
                                 tax_code: product.tax_code || (product.tax_id ? product.tax_id : null),
                                 include_ppn: product.include_ppn || false,
+                                is_production: product.is_production !== undefined ? (product.is_production == 1 || product.is_production === true) : !['design', 'payment', 'supplier payment'].includes(e.project_type),
                             })),
                         })),
                 ];
@@ -380,6 +382,7 @@ const init = () => {
                                 uom_code: product.uom_code || (product.unit_id ? product.unit_id : null),
                                 tax_code: product.tax_code || (product.tax_id ? product.tax_id : null),
                                 include_ppn: product.include_ppn || false,
+                                is_production: product.is_production !== undefined ? (product.is_production == 1 || product.is_production === true) : false,
                             })),
                             client_po_date: dayjs(e.client_po_date).format(
                                 "YYYY-MM-DD"
@@ -709,6 +712,7 @@ const addNewDeposit = async (force = false) => {
                 description: null,
                 price: null,
                 total_price: null,
+                is_production: false,
                 uom_code: null,
                 tax_code: null,
                 include_ppn: false,
@@ -1788,7 +1792,7 @@ watch(() => state.ppn_type, async () => {
                                             <thead class="bg-gray-100">
                                                 <tr>
                                                     <td
-                                                        colspan="10"
+                                                        colspan="11"
                                                         class="bg-gray-50 border-b-2 pt-2"
                                                     >
                                                         <table
@@ -1969,6 +1973,11 @@ watch(() => state.ppn_type, async () => {
                                                         class="text-center text-sm px-1 py-2 w-80px"
                                                     >
                                                         Incl. PPN
+                                                    </th>
+                                                    <th
+                                                        class="text-center text-sm px-1 py-2 w-80px"
+                                                    >
+                                                        Prod.
                                                     </th>
                                                     <th
                                                         class="text-left text-sm px-1 py-2 w-120px"
@@ -2162,6 +2171,20 @@ watch(() => state.ppn_type, async () => {
                                                             </label>
                                                         </div>
                                                     </td>
+                                                    <td class="text-center">
+                                                        <div class="flex items-center justify-center h-full">
+                                                            <label class="flex flex-col items-center gap-1 cursor-pointer">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    v-model="product.is_production"
+                                                                    class="w-4 h-4 accent-blue-500 cursor-pointer"
+                                                                />
+                                                                <span class="text-xs" :class="product.is_production ? 'text-blue-500 font-semibold' : 'text-gray-400'">
+                                                                    {{ product.is_production ? 'Yes' : 'No' }}
+                                                                </span>
+                                                            </label>
+                                                        </div>
+                                                    </td>
                                                     <td class="">
                                                         <div
                                                             class="flex items-center flex-col gap-1"
@@ -2351,7 +2374,7 @@ watch(() => state.ppn_type, async () => {
                                                             'finance'
                                                     "
                                                 >
-                                                    <td colspan="10">
+                                                    <td colspan="11">
                                                         <div
                                                             class="flex border-t"
                                                         >

@@ -356,8 +356,6 @@ const submit = () => {
     // Process products to include UOM and Tax codes
     products.forEach(productGroup => {
         if (productGroup.products) {
-            // Service types (design, payment) are NOT production items
-            const isProduction = !['design', 'payment', 'supplier payment'].includes(productGroup.project_type);
             productGroup.products = productGroup.products.map(product => {
                 // Only include product if it has a name
                 if (product.name && product.name.trim() !== '') {
@@ -366,7 +364,8 @@ const submit = () => {
                         // Include UOM and Tax codes if they exist
                         uom_code: product.uom_code || null,
                         tax_code: product.tax_code || null,
-                        is_production: isProduction,
+                        // Use user selected is_production value, default to true for production types
+                        is_production: product.is_production !== undefined ? product.is_production : !['design', 'payment', 'supplier payment'].includes(productGroup.project_type),
                     };
                 }
                 return product;
@@ -447,16 +446,16 @@ const submit = () => {
 };
 const generateProds = () => {
     state.prd.gimmick = {
-        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, include_ppn: false, price: "", description: "" }],
+        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, include_ppn: false, is_production: true, price: "", description: "" }],
     };
     state.prd.design = {
-        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, include_ppn: false, price: "", description: "" }],
+        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, include_ppn: false, is_production: false, price: "", description: "" }],
     };
     state.prd.printing = {
-        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, include_ppn: false, price: "", description: "" }],
+        products: [{ name: "", product_code: "", quantity: "", uom_code: null, tax_code: null, include_ppn: false, is_production: true, price: "", description: "" }],
     };
     state.prd.payment = {
-        products: [{ name: "", product_code: "", uom_code: null, tax_code: null, price: "", description: "" }],
+        products: [{ name: "", product_code: "", uom_code: null, tax_code: null, is_production: false, price: "", description: "" }],
     };
 };
 onMounted(() => {
@@ -517,6 +516,7 @@ onMounted(() => {
                                 uom_code: product.uom_code || (product.unit_id ? product.unit_id : null),
                                 tax_code: product.tax_code || (product.tax_id ? product.tax_id : null),
                                 include_ppn: product.include_ppn || false,
+                                is_production: product.is_production !== undefined ? (product.is_production == 1 || product.is_production === true) : !['design', 'payment', 'supplier payment'].includes(e.project_type),
                                 price: product.price || "",
                                 total_price: product.total_price || (product.quantity && product.price ? parseFloat(product.quantity) * calculatePriceWithTax(parseFloat(product.price), product.tax_code, product.include_ppn || false) : 0)
                             };
@@ -1029,6 +1029,9 @@ async function loadUomAndTaxData() {
                                 <th class="text-left text-sm px-4 py-2 w-100px text-center">
                                     Incl. PPN
                                 </th>
+                                <th class="text-left text-sm px-4 py-2 w-100px text-center">
+                                    Prod.
+                                </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Price
                                 </th>
@@ -1216,6 +1219,20 @@ async function loadUomAndTaxData() {
                                         </label>
                                     </div>
                                 </td>
+                                <td class="text-center">
+                                    <div class="flex items-center justify-center h-full">
+                                        <label class="flex flex-col items-center gap-1 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                v-model="product.is_production"
+                                                class="w-4 h-4 accent-blue-500 cursor-pointer"
+                                            />
+                                            <span class="text-xs" :class="product.is_production ? 'text-blue-500 font-semibold' : 'text-gray-400'">
+                                                {{ product.is_production ? 'Yes' : 'No' }}
+                                            </span>
+                                        </label>
+                                    </div>
+                                </td>
                                 <td class="">
                                     <div
                                         class="flex items-center flex-col gap-1"
@@ -1297,7 +1314,7 @@ async function loadUomAndTaxData() {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="9">
+                                <td colspan="11">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -1311,6 +1328,7 @@ async function loadUomAndTaxData() {
                                                         uom_code: null,
                                                         tax_code: null,
                                                         include_ppn: false,
+                                                        is_production: true,
                                                         price: '',
                                                         description: '',
                                                     }
@@ -1347,6 +1365,9 @@ async function loadUomAndTaxData() {
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-100px text-center">
                                     Incl. PPN
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-100px text-center">
+                                    Prod.
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Price
@@ -1535,6 +1556,20 @@ async function loadUomAndTaxData() {
                                         </label>
                                     </div>
                                 </td>
+                                <td class="text-center">
+                                    <div class="flex items-center justify-center h-full">
+                                        <label class="flex flex-col items-center gap-1 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                v-model="product.is_production"
+                                                class="w-4 h-4 accent-blue-500 cursor-pointer"
+                                            />
+                                            <span class="text-xs" :class="product.is_production ? 'text-blue-500 font-semibold' : 'text-gray-400'">
+                                                {{ product.is_production ? 'Yes' : 'No' }}
+                                            </span>
+                                        </label>
+                                    </div>
+                                </td>
                                 <td class="">
                                     <div
                                         class="flex items-center flex-col gap-1"
@@ -1616,7 +1651,7 @@ async function loadUomAndTaxData() {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="9">
+                                <td colspan="11">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -1629,6 +1664,7 @@ async function loadUomAndTaxData() {
                                                     uom_code: null,
                                                     tax_code: null,
                                                     include_ppn: false,
+                                                    is_production: false,
                                                     price: '',
                                                     description: '',
                                                 })
@@ -1663,6 +1699,9 @@ async function loadUomAndTaxData() {
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-100px text-center">
                                     Incl. PPN
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-100px text-center">
+                                    Prod.
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Price
@@ -1851,6 +1890,20 @@ async function loadUomAndTaxData() {
                                         </label>
                                     </div>
                                 </td>
+                                <td class="text-center">
+                                    <div class="flex items-center justify-center h-full">
+                                        <label class="flex flex-col items-center gap-1 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                v-model="product.is_production"
+                                                class="w-4 h-4 accent-blue-500 cursor-pointer"
+                                            />
+                                            <span class="text-xs" :class="product.is_production ? 'text-blue-500 font-semibold' : 'text-gray-400'">
+                                                {{ product.is_production ? 'Yes' : 'No' }}
+                                            </span>
+                                        </label>
+                                    </div>
+                                </td>
                                 <td class="">
                                     <div
                                         class="flex items-center flex-col gap-1"
@@ -1932,7 +1985,7 @@ async function loadUomAndTaxData() {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="9">
+                                <td colspan="11">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -1978,6 +2031,9 @@ async function loadUomAndTaxData() {
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px hidden">
                                     Tax
+                                </th>
+                                <th class="text-left text-sm px-4 py-2 w-100px text-center">
+                                    Prod.
                                 </th>
                                 <th class="text-left text-sm px-4 py-2 w-160px">
                                     Amount
@@ -2147,6 +2203,20 @@ async function loadUomAndTaxData() {
                                         >
                                     </div>
                                 </td>
+                                <td class="text-center">
+                                    <div class="flex items-center justify-center h-full">
+                                        <label class="flex flex-col items-center gap-1 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                v-model="product.is_production"
+                                                class="w-4 h-4 accent-blue-500 cursor-pointer"
+                                            />
+                                            <span class="text-xs" :class="product.is_production ? 'text-blue-500 font-semibold' : 'text-gray-400'">
+                                                {{ product.is_production ? 'Yes' : 'No' }}
+                                            </span>
+                                        </label>
+                                    </div>
+                                </td>
                                 <td class="">
                                     <div
                                         class="flex items-center flex-col gap-1"
@@ -2188,7 +2258,7 @@ async function loadUomAndTaxData() {
                         </tbody>
                         <tfoot>
                             <tr>
-                                <td colspan="7">
+                                <td colspan="11">
                                     <button
                                         type="button"
                                         class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg"
@@ -2200,6 +2270,7 @@ async function loadUomAndTaxData() {
                                                         product_code: '',
                                                         uom_code: null,
                                                         tax_code: null,
+                                                        is_production: false,
                                                         price: '',
                                                         description: '',
                                                     }

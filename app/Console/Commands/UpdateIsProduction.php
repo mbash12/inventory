@@ -31,23 +31,24 @@ class UpdateIsProduction extends Command
     {
         $this->info('Starting bulk update of is_production for products...');
 
-        $productionTypes = ['design', 'payment', 'supplier payment', 'supplier_payment'];
+        // Service-based types that are NOT production
+        $serviceTypes = ['design', 'payment', 'supplier payment', 'supplier_payment'];
 
-        // SET is_production = true for products whose project_type matches production types
-        $trueCount = DB::table('products')
-            ->join('projects', 'products.project', '=', 'projects.id')
-            ->whereIn(DB::raw('LOWER(projects.project_type)'), $productionTypes)
-            ->update(['products.is_production' => true]);
-
-        $this->info("Set is_production = TRUE for {$trueCount} products.");
-
-        // SET is_production = false for products whose project type does NOT match
+        // SET is_production = false for products whose project_type matches service types
         $falseCount = DB::table('products')
             ->join('projects', 'products.project', '=', 'projects.id')
-            ->whereNotIn(DB::raw('LOWER(projects.project_type)'), $productionTypes)
+            ->whereIn(DB::raw('LOWER(projects.project_type)'), $serviceTypes)
             ->update(['products.is_production' => false]);
 
-        $this->info("Set is_production = FALSE for {$falseCount} products.");
+        $this->info("Set is_production = FALSE for {$falseCount} products (Service types).");
+
+        // SET is_production = true for products whose project type is a production type
+        $trueCount = DB::table('products')
+            ->join('projects', 'products.project', '=', 'projects.id')
+            ->whereNotIn(DB::raw('LOWER(projects.project_type)'), $serviceTypes)
+            ->update(['products.is_production' => true]);
+
+        $this->info("Set is_production = TRUE for {$trueCount} products (Production types).");
 
         // Also set is_production = false for products with no associated project
         $noProjectCount = DB::table('products')
