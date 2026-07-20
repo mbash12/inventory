@@ -19,13 +19,17 @@ use Src\Models\Notification;
 use Src\Models\Thread;
 use Src\Models\Inventory;
 use Src\Models\Warehouse;
+use Src\Services\InventoryService;
 
 class PoDepositController extends Controller
 {
-    // public function __construct()
-    // {
-    //     $this->middleware('jwt.verify');
-    // }
+    private InventoryService $inventoryService;
+
+    public function __construct(InventoryService $inventoryService)
+    {
+        $this->inventoryService = $inventoryService;
+        // $this->middleware('jwt.verify');
+    }
 
     public function migrate()
     {
@@ -489,89 +493,11 @@ class PoDepositController extends Controller
     }
 
     /**
-     * Recalculate inventory for a single project
+     * Recalculate inventory for a single project from delivery movements
+     * (does not wipe delivered stock when PO/products are edited).
      */
     private function recalculateInventoryForSingleProject($projectId)
     {
-        $project = Project::with('products_data')->findOrFail($projectId);
-        $existingInventories = Inventory::where('project', $projectId)->get();
-
-        // Only recalculate if the project already has some inventory records
-        if ($existingInventories->count() > 0) {
-            \Log::info("Recalculating inventory for project {$projectId} which has " . $existingInventories->count() . " existing inventory records");
-
-            // Get the manufacture warehouse ID from the project
-            $manufactureId = $project->manufacture ?? 1; // Default to warehouse ID 1 if not set
-            $wh = Warehouse::find($manufactureId);
-
-            foreach ($project->products_data as $product) {
-                \Log::info("Processing product ID: {$product->id}, Name: {$product->name}, Quantity: {$product->quantity} for project {$projectId}");
-
-                // Check if inventory records exist for this product in manufacture warehouse
-                $hasManufactureInventory = $existingInventories->where('warehouse', $manufactureId)
-                    ->where('product', $product->id)
-                    ->first();
-
-                // Check if inventory records exist for this product in client warehouse
-                $hasClientInventory = $existingInventories->where('warehouse', 2)
-                    ->where('product', $product->id)
-                    ->first();
-
-                \Log::info("Product {$product->id} - Manufacture inventory exists: " . ($hasManufactureInventory ? 'YES' : 'NO'));
-                \Log::info("Product {$product->id} - Client inventory exists: " . ($hasClientInventory ? 'YES' : 'NO'));
-
-                // Update or create inventory record for the manufacture warehouse
-                if ($hasManufactureInventory) {
-                    $hasManufactureInventory->update([
-                        "quantity" => $product->quantity,
-                        "product_name" => $product->name,
-                        "warehouse_name" => $wh['name'],
-                        "storage" => $wh['storage']
-                    ]);
-                    \Log::info("Updated manufacture inventory for product {$product->id}");
-                } else {
-                    // Since the project already has inventory records (overall count > 0),
-                    // we should create inventory records for this new product too
-                    Inventory::create([
-                        "project" => $project->id,
-                        "product" => $product->id,
-                        "product_name" => $product->name,
-                        "quantity" => $product->quantity,
-                        "warehouse" => $manufactureId,
-                        "warehouse_name" => $wh['name'],
-                        "storage" => $wh['storage']
-                    ]);
-                    \Log::info("Created new manufacture inventory for product {$product->id}");
-                }
-
-                // Update or create inventory record for the client warehouse (ID 2)
-                if ($hasClientInventory) {
-                    $hasClientInventory->update([
-                        "quantity" => 0, // Reset client warehouse quantity to 0
-                        "product_name" => $product->name,
-                        "warehouse_name" => "Client",
-                        "storage" => FALSE
-                    ]);
-                    \Log::info("Updated client inventory for product {$product->id}");
-                } else {
-                    // Since the project already has inventory records (overall count > 0),
-                    // we should create inventory records for this new product in client warehouse too
-                    Inventory::create([
-                        "project" => $project->id,
-                        "product" => $product->id,
-                        "product_name" => $product->name,
-                        "quantity" => 0,
-                        "warehouse" => 2,
-                        "warehouse_name" => "Client",
-                        "storage" => FALSE
-                    ]);
-                    \Log::info("Created new client inventory for product {$product->id}");
-                }
-            }
-
-            \Log::info("Completed inventory recalculation for project {$projectId}");
-        } else {
-            \Log::info("Project {$projectId} has no existing inventory records, skipping recalculation");
-        }
+        $this->inventoryService->recalculateForProject((int) $projectId);
     }
 }

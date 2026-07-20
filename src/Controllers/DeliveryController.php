@@ -20,13 +20,16 @@ use Src\Models\Inventory;
 use Src\Models\Notification;
 use Src\Models\Warehouse;
 use Src\Models\User;
+use Src\Services\InventoryService;
 
 class DeliveryController extends Controller
 {
+    private InventoryService $inventoryService;
 
-    public function __construct()
+    public function __construct(InventoryService $inventoryService)
     {
         $this->middleware('jwt.verify');
+        $this->inventoryService = $inventoryService;
     }
     
     public function index($id, Request $request)
@@ -149,55 +152,59 @@ class DeliveryController extends Controller
                 if (isset($childData['id'])) {
                     $existingItem = $existingItems->where('id', $childData['id'])->first();
                     if ($existingItem) {
+                        $wasDelivered = filled($existingItem->delivered_at);
+                        $nowDelivered = filled($childData['delivered_at'] ?? null);
+                        $newQty = (int) ($childData['actual_quantity'] ?? $existingItem->actual_quantity);
+                        $oldQty = (int) $existingItem->actual_quantity;
+
                         // Case: Marking as delivered
-                        if ($existingItem['delivered_at'] === null && $childData['delivered_at'] !== null) {
-                            $inv_org = Inventory::where('warehouse', $childData['origin'])
-                                ->where('project', $delivery->project)
-                                ->where('product', $childData['product'])->first();
-                            $inv_dst = Inventory::where('warehouse', $childData['destination'])
-                                ->where('project', $delivery->project)
-                                ->where('product', $childData['product'])->first();
-
-                            if ($inv_org) {
-                                $inv_org->update(['quantity' => $inv_org->quantity - $childData['actual_quantity']]);
-                            }
-
-                            if ($inv_dst) {
-                                $inv_dst->update(['quantity' => $inv_dst->quantity + $childData['actual_quantity']]);
-                            } else {
-                                $warehouse = Warehouse::find($childData['destination']);
-                                $product = Product::find($childData['product']);
-                                Inventory::create([
-                                    "project" => $delivery->project,
-                                    "product" => $childData['product'],
-                                    "product_name" => $product->name,
-                                    "quantity" => $childData['actual_quantity'],
-                                    "warehouse" => $childData['destination'],
-                                    "warehouse_name" => $warehouse->name,
-                                    "storage" => $warehouse->storage
-                                ]);
-                            }
+                        if (!$wasDelivered && $nowDelivered) {
+                            $this->inventoryService->transfer(
+                                (int) $delivery->project,
+                                (int) $childData['product'],
+                                (int) $childData['origin'],
+                                (int) $childData['destination'],
+                                $newQty
+                            );
                         }
                         // Case: Unmarking as delivered
-                        elseif ($existingItem['delivered_at'] !== null && $childData['delivered_at'] === null) {
-                            $inv_org = Inventory::where('warehouse', $existingItem->origin)
-                                ->where('project', $delivery->project)
-                                ->where('product', $existingItem->product)->first();
-                            $inv_dst = Inventory::where('warehouse', $existingItem->destination)
-                                ->where('project', $delivery->project)
-                                ->where('product', $existingItem->product)->first();
+                        elseif ($wasDelivered && !$nowDelivered) {
+                            $this->inventoryService->reverseTransfer(
+                                (int) $delivery->project,
+                                (int) $existingItem->product,
+                                (int) $existingItem->origin,
+                                (int) $existingItem->destination,
+                                $oldQty
+                            );
+                        }
+                        // Case: Already delivered — adjust for qty / warehouse changes
+                        elseif ($wasDelivered && $nowDelivered) {
+                            $originChanged = (int) $existingItem->origin !== (int) $childData['origin'];
+                            $destChanged = (int) $existingItem->destination !== (int) $childData['destination'];
+                            $productChanged = (int) $existingItem->product !== (int) $childData['product'];
+                            $qtyChanged = $oldQty !== $newQty;
 
-                            if ($inv_org) {
-                                $inv_org->update(['quantity' => $inv_org->quantity + $existingItem->actual_quantity]);
-                            }
-                            if ($inv_dst) {
-                                $inv_dst->update(['quantity' => $inv_dst->quantity - $existingItem->actual_quantity]);
+                            if ($originChanged || $destChanged || $productChanged || $qtyChanged) {
+                                $this->inventoryService->reverseTransfer(
+                                    (int) $delivery->project,
+                                    (int) $existingItem->product,
+                                    (int) $existingItem->origin,
+                                    (int) $existingItem->destination,
+                                    $oldQty
+                                );
+                                $this->inventoryService->transfer(
+                                    (int) $delivery->project,
+                                    (int) $childData['product'],
+                                    (int) $childData['origin'],
+                                    (int) $childData['destination'],
+                                    $newQty
+                                );
                             }
                         }
 
                         $existingItem->update($childData);
 
-                        if ($existingItem['delivered_at'] === null) {
+                        if (!filled($existingItem->delivered_at)) {
                             $alldelivery_items_dataDelivered = false;
                         }
                     }
@@ -210,20 +217,14 @@ class DeliveryController extends Controller
             $missingChildren = $existingItems->whereNotIn('id', collect($request->delivery_items)->pluck('id'));
             foreach ($missingChildren as $missingChild) {
                 // If the item being deleted was delivered, revert inventory
-                if ($missingChild->delivered_at !== null) {
-                    $inv_org = Inventory::where('warehouse', $missingChild->origin)
-                        ->where('project', $delivery->project)
-                        ->where('product', $missingChild->product)->first();
-                    $inv_dst = Inventory::where('warehouse', $missingChild->destination)
-                        ->where('project', $delivery->project)
-                        ->where('product', $missingChild->product)->first();
-
-                    if ($inv_org) {
-                        $inv_org->update(['quantity' => $inv_org->quantity + $missingChild->actual_quantity]);
-                    }
-                    if ($inv_dst) {
-                        $inv_dst->update(['quantity' => $inv_dst->quantity - $missingChild->actual_quantity]);
-                    }
+                if (filled($missingChild->delivered_at)) {
+                    $this->inventoryService->reverseTransfer(
+                        (int) $delivery->project,
+                        (int) $missingChild->product,
+                        (int) $missingChild->origin,
+                        (int) $missingChild->destination,
+                        (int) $missingChild->actual_quantity
+                    );
                 }
                 $missingChild->delete();
             }
@@ -273,20 +274,14 @@ class DeliveryController extends Controller
 
             // Revert inventory for delivered items
             foreach ($delivery->delivery_items_data as $item) {
-                if ($item->delivered_at !== null) {
-                    $inv_org = Inventory::where('warehouse', $item->origin)
-                        ->where('project', $projectId)
-                        ->where('product', $item->product)->first();
-                    $inv_dst = Inventory::where('warehouse', $item->destination)
-                        ->where('project', $projectId)
-                        ->where('product', $item->product)->first();
-
-                    if ($inv_org) {
-                        $inv_org->update(['quantity' => $inv_org->quantity + $item->actual_quantity]);
-                    }
-                    if ($inv_dst) {
-                        $inv_dst->update(['quantity' => $inv_dst->quantity - $item->actual_quantity]);
-                    }
+                if (filled($item->delivered_at)) {
+                    $this->inventoryService->reverseTransfer(
+                        (int) $projectId,
+                        (int) $item->product,
+                        (int) $item->origin,
+                        (int) $item->destination,
+                        (int) $item->actual_quantity
+                    );
                 }
             }
 

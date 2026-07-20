@@ -47,25 +47,25 @@ class ProjectController extends Controller
                 "status" => 'ready',
             ]);
             $existingProducts = Product::where('project', $id)->get();
-            $existingInventories = Inventory::query();
-            $manufacture = $item['default_origin'] ?? 1;
-            if (!empty($request->manufacture)) {
-                $manufacture = $request->manufacture;
-            }
+            $manufacture = (int) ($request->manufacture ?: ($project->manufacture ?? 1));
             $wh = Warehouse::find($manufacture);
 
             foreach ($existingProducts as $existingProduct) {
+                $inv_org = Inventory::where('project', $project->id)
+                    ->where('warehouse', $manufacture)
+                    ->where('product', $existingProduct->id)
+                    ->first();
+                $inv_dst = Inventory::where('project', $project->id)
+                    ->where('warehouse', 2)
+                    ->where('product', $existingProduct->id)
+                    ->first();
 
-                $inv_org = $existingInventories->where('warehouse', $manufacture)
-                    ->where('product', $existingProduct['id'])->first();
-                $inv_dst = $existingInventories->where('warehouse', 2)
-                    ->where('product', $existingProduct['id'])->first();
                 if ($inv_org) {
                     $inv_org->update([
                         "project" => $project->id,
-                        "product" => $existingProduct['id'],
-                        "product_name" => $existingProduct['name'],
-                        "quantity" => $existingProduct['quantity'],
+                        "product" => $existingProduct->id,
+                        "product_name" => $existingProduct->name,
+                        "quantity" => $existingProduct->quantity,
                         "warehouse" => $manufacture,
                         "warehouse_name" => $wh['name'],
                         "storage" => $wh['storage']
@@ -75,7 +75,7 @@ class ProjectController extends Controller
                         "project" => $project->id,
                         "product" => $existingProduct->id,
                         "product_name" => $existingProduct->name,
-                        "quantity" => $existingProduct['quantity'],
+                        "quantity" => $existingProduct->quantity,
                         "warehouse" => $manufacture,
                         "warehouse_name" => $wh['name'],
                         "storage" => $wh['storage']
@@ -85,8 +85,8 @@ class ProjectController extends Controller
                 if ($inv_dst) {
                     $inv_dst->update([
                         "project" => $project->id,
-                        "product" => $existingProduct['id'],
-                        "product_name" => $existingProduct['name'],
+                        "product" => $existingProduct->id,
+                        "product_name" => $existingProduct->name,
                         "quantity" => 0,
                         "warehouse" => 2,
                         "warehouse_name" => "Client",
