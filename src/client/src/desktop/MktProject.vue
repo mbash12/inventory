@@ -1576,7 +1576,7 @@ onMounted(() => {
                                         v-if="
                                             (user.position == 'marketing' ||
                                                 user.position == 'admin' || (user.position == 'design' && ['design','printing'].includes(row.project_type))) &&
-                                            !row.is_po_deposit
+                                            (!row.is_po_deposit || (row.po_deposit_data && row.po_deposit_data.is_bundle))
                                         "
                                     >
                                         <div
@@ -1593,7 +1593,7 @@ onMounted(() => {
                                         v-if="
                                             (user.position == 'marketing' ||
                                                 user.position == 'admin' || (user.position == 'design' && ['design','printing'].includes(row.project_type))) &&
-                                            !row.is_po_deposit
+                                            (!row.is_po_deposit || (row.po_deposit_data && row.po_deposit_data.is_bundle))
                                         "
                                     >
                                         <i class="ri-delete-bin-line"></i>

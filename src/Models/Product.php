@@ -19,6 +19,8 @@ class Product extends Model
         'name',
         'description',
         'quantity',
+        'qty_per_set',
+        'is_group_main',
         'price',
         'total_price',
         'is_production',
@@ -35,11 +37,13 @@ class Product extends Model
         'project' => 'integer',
         'is_production' => 'boolean',
         'include_ppn' => 'boolean',
+        'is_group_main' => 'boolean',
         'uom_code' => 'string',
         'tax_code' => 'string',
         'price' => 'decimal:2',
         'total_price' => 'decimal:2',
         'quantity' => 'decimal:2',
+        'qty_per_set' => 'decimal:2',
     ];
 
     public function project(): BelongsTo

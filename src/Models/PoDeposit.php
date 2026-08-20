@@ -29,6 +29,7 @@ class PoDeposit extends Model
         'purchase_ordres',
         'invoices',
         'is_po_deposit',
+        'is_bundle',
         'closed_at',
         'budget',
         'expense',
@@ -51,6 +52,8 @@ class PoDeposit extends Model
         'expense' => 'decimal:2',
         'balance' => 'decimal:2',
         'total_price' => 'decimal:2',
+        'is_bundle' => 'boolean',
+        'is_po_deposit' => 'boolean',
     ];
     
 

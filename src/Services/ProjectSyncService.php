@@ -222,6 +222,8 @@ class ProjectSyncService
                     'tax_id' => null,
                     'tax_code' => $product->tax_code,
                     'is_production' => (bool) ($product->is_production ?? false),
+                    'qty_per_set' => $product->qty_per_set ?? null,
+                    'is_group_main' => (bool) ($product->is_group_main ?? false),
                     'source_project_id' => $project->id,
                     'source_product_id' => $product->id,
                     'project_type' => $project->project_type, // For product category mapping
@@ -257,6 +259,11 @@ class ProjectSyncService
             'items' => $items,
             'is_grouped' => true,
             'project_count' => $projects->count(),
+            'is_bundle' => (bool) ($poDeposit->is_bundle ?? false),
+            'bundle_meta' => [
+                'is_bundle_main' => false,
+                'bundle_group' => null,
+            ],
         ];
 
         $response = $this->sendToAccounting($salesOrderData);
@@ -351,6 +358,12 @@ class ProjectSyncService
                 'source_po_deposit_id' => $poDeposit->id,
                 'source_project_id' => $project->id,
                 'is_actual' => false,
+                'is_bundle' => (bool) ($poDeposit->is_bundle ?? false),
+                'bundle_meta' => [
+                    'is_bundle_main' => (bool) ($poDeposit->is_bundle ?? false),
+                    'bundle_project_id' => $project->id,
+                    'bundle_group' => $project->client_po_number,
+                ],
             ];
 
             $response = $this->sendToAccounting($salesOrderData);
@@ -447,6 +460,12 @@ class ProjectSyncService
                 'source_po_deposit_id' => $poDeposit->id,
                 'source_project_id' => $project->id,
                 'is_actual' => true,
+                'is_bundle' => (bool) ($poDeposit->is_bundle ?? false),
+                'bundle_meta' => [
+                    'is_bundle_main' => false,
+                    'bundle_project_id' => $project->id,
+                    'bundle_group' => $project->client_po_number,
+                ],
                 // Link to parent deposit SO
                 'parent_deposit_so_id' => $parentSoInfo['sales_order_id'] ?? null,
                 'parent_deposit_so_number' => $parentSoInfo['sales_order_number'] ?? null,
@@ -535,6 +554,8 @@ class ProjectSyncService
                 'tax_id' => null,
                 'tax_code' => $product->tax_code,
                 'is_production' => (bool) ($product->is_production ?? false),
+                'qty_per_set' => $product->qty_per_set ?? null,
+                'is_group_main' => (bool) ($product->is_group_main ?? false),
                 'source_project_id' => $project->id,
                 'source_product_id' => $product->id,
                 'project_type' => $project->project_type,

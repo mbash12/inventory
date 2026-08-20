@@ -51,6 +51,9 @@ const state = reactive({
     client_pic_name: null,
     ppn_type: 'ppn', // ppn or non_ppn
     is_po_deposit: false,
+    is_bundle_mode: false,
+    bundle_groups: [],
+    bundle_selected: null,
     status: "new",
     products: [{ name: "", product_code: "", quantity: "", description: "" }],
     tab: 0,
@@ -119,8 +122,20 @@ const calculatePriceWithTax = (price, taxCode, includePpn = false) => {
     return Math.round(total * 100) / 100;
 };
 
+const bundleCalculatedTotal = computed(() => {
+    let total = 0;
+    (state.bundle_groups || []).forEach(g => {
+        if (g.name && g.name.trim() !== '' && g.sets_qty && g.set_price) {
+            const priceWithTax = calculatePriceWithTax(parseFloat(g.set_price), g.tax_code, g.include_ppn);
+            total += parseFloat(g.sets_qty) * priceWithTax;
+        }
+    });
+    return Math.round(total * 100) / 100;
+});
+
 // Computed property to calculate total price based on all products
 const calculatedTotalPrice = computed(() => {
+    if (state.is_bundle_mode) return bundleCalculatedTotal.value;
     let total = 0;
 
     // Calculate total for gimmick, design, and printing products (quantity * price with tax)
@@ -175,6 +190,16 @@ watch(() => state.ppn_type, async () => {
 
 const deleteSelectedProduct = () => {
     confirmDelete.value = false;
+    if (state.is_bundle_mode && state.bundle_selected) {
+        const [gi, ci] = state.bundle_selected;
+        if (ci === null || ci === undefined) {
+            state.bundle_groups.splice(gi, 1);
+        } else {
+            state.bundle_groups[gi].components.splice(ci, 1);
+        }
+        state.bundle_selected = null;
+        return;
+    }
     state.prd[state.selected_type].products.splice(state.selected, 1);
 };
 const setDelete = (type, i) => {
@@ -182,6 +207,76 @@ const setDelete = (type, i) => {
     state.selected_type = type;
     confirmDelete.value = true;
 };
+const onBundleProductSelect = (bundle, selectedData) => {
+    if (selectedData && selectedData.name) {
+        bundle.name = selectedData.name;
+        bundle.product_code = selectedData.code;
+        bundle.set_price = selectedData.selling_price || 0;
+        bundle.description = selectedData.description || '';
+        bundle.uom_code = selectedData.unit ? selectedData.unit.code : null;
+        if (state.ppn_type === 'non_ppn') {
+            const zeroTax = taxes.value?.find(tax => parseFloat(tax.tax_percentage) === 0);
+            bundle.tax_code = zeroTax ? zeroTax.code : null;
+        } else {
+            bundle.tax_code = selectedData.tax ? selectedData.tax.code : null;
+        }
+    } else {
+        bundle.name = null;
+        bundle.product_code = null;
+        bundle.set_price = null;
+        bundle.description = null;
+        bundle.uom_code = null;
+        bundle.tax_code = null;
+    }
+};
+const onBundleComponentSelect = (comp, selectedData) => {
+    if (selectedData && selectedData.name) {
+        comp.name = selectedData.name;
+        comp.product_code = selectedData.code;
+        comp.price = selectedData.selling_price || 0;
+        comp.description = selectedData.description || '';
+        comp.uom_code = selectedData.unit ? selectedData.unit.code : null;
+        if (state.ppn_type === 'non_ppn') {
+            const zeroTax = taxes.value?.find(tax => parseFloat(tax.tax_percentage) === 0);
+            comp.tax_code = zeroTax ? zeroTax.code : null;
+        } else {
+            comp.tax_code = selectedData.tax ? selectedData.tax.code : null;
+        }
+    } else {
+        comp.name = null;
+        comp.product_code = null;
+        comp.price = null;
+        comp.description = null;
+        comp.uom_code = null;
+        comp.tax_code = null;
+    }
+};
+const addBundleGroup = () => {
+    state.bundle_groups.push({
+        name: '', product_code: '', sets_qty: '', set_price: '', uom_code: null, tax_code: null, include_ppn: false, description: '',
+        components: [{ name: '', product_code: '', qty_per_set: '', quantity: '', uom_code: null, tax_code: null, include_ppn: false, is_production: true, price: '', description: '' }]
+    });
+};
+const addBundleComponent = (gi) => {
+    state.bundle_groups[gi].components.push({ name: '', product_code: '', qty_per_set: '', quantity: '', uom_code: null, tax_code: null, include_ppn: false, is_production: true, price: '', description: '' });
+};
+const setBundleDelete = (gi, ci = null) => {
+    state.bundle_selected = [gi, ci];
+    confirmDelete.value = true;
+};
+const recalcBundleQuantities = () => {
+    state.bundle_groups.forEach(g => {
+        const sets = parseFloat(g.sets_qty) || 0;
+        g.components.forEach(c => {
+            const qps = parseFloat(c.qty_per_set);
+            if (!isNaN(qps) && sets) {
+                c.quantity = Math.round(qps * sets * 100) / 100;
+            }
+        });
+    });
+};
+watch(() => state.bundle_groups.map(g => g.sets_qty), () => { recalcBundleQuantities(); });
+watch(() => state.bundle_groups.flatMap(g => g.components.map(c => c.qty_per_set)), () => { recalcBundleQuantities(); });
 const submit = () => {
     // Check if NON-PPN is selected but 0% tax doesn't exist
     if (state.ppn_type === 'non_ppn') {
@@ -193,6 +288,45 @@ const submit = () => {
         }
     }
     
+    if (state.is_bundle_mode) {
+        state.errors = {};
+        let hasError = false;
+        if (!state.client_code) { state.errors.client_company = ['Client code is missing. Please re-select the client company.']; hasError = true; }
+        if (!state.bundle_groups || state.bundle_groups.length === 0) { state.errors.bundle_groups = ['At least one bundle is required']; hasError = true; }
+        state.bundle_groups.forEach((g, gi) => {
+            if (!g.name || g.name.trim() === '') { state.errors[`bundle_groups.${gi}.name`] = ['Bundle name is required']; hasError = true; }
+            if (!g.sets_qty || parseFloat(g.sets_qty) <= 0) { state.errors[`bundle_groups.${gi}.sets_qty`] = ['Qty (Set) is required']; hasError = true; }
+            if (!g.set_price || parseFloat(g.set_price) <= 0) { state.errors[`bundle_groups.${gi}.set_price`] = ['Price / Set is required']; hasError = true; }
+            if (!g.product_code) { state.errors[`bundle_groups.${gi}.product_code`] = ['Product Code is required']; hasError = true; }
+            if (!g.uom_code) { state.errors[`bundle_groups.${gi}.uom_code`] = ['UOM is required']; hasError = true; }
+            if (!g.tax_code) { state.errors[`bundle_groups.${gi}.tax_code`] = ['Tax is required']; hasError = true; }
+            if (!g.components || g.components.length === 0) { state.errors[`bundle_groups.${gi}.components`] = ['At least one component is required']; hasError = true; }
+            g.components.forEach((c, ci) => {
+                if (!c.name || c.name.trim() === '') return;
+                const ek = `bundle_groups.${gi}.components.${ci}`;
+                if (!c.qty_per_set || parseFloat(c.qty_per_set) <= 0) { state.errors[`${ek}.qty_per_set`] = ['Qty / Set is required']; hasError = true; }
+                if (!c.price || parseFloat(c.price) <= 0) { state.errors[`${ek}.price`] = ['Price is required']; hasError = true; }
+                if (!c.uom_code) { state.errors[`${ek}.uom_code`] = ['UOM is required']; hasError = true; }
+                if (!c.tax_code) { state.errors[`${ek}.tax_code`] = ['Tax is required']; hasError = true; }
+                if (!c.product_code) { state.errors[`${ek}.product_code`] = ['Product Code is required']; hasError = true; }
+            });
+        });
+        if (hasError) { alertShowFailed.value = true; return; }
+        loading();
+        recalcBundleQuantities();
+        const po_deposits = state.bundle_groups.map((g, i) => {
+            const pw = calculatePriceWithTax(parseFloat(g.set_price), g.tax_code, g.include_ppn);
+            const total_price = Math.round(parseFloat(g.sets_qty || 0) * pw * 100) / 100;
+            return { title: g.name, job_number: state.job_number + "-D" + (i+1), client_po_date: state.client_po_date, client_po_number: 'BUNDLE-' + String(i+1).padStart(3,'0'), client_company: state.client_company, client_pic_name: state.client_pic_name, total_price, project_type: 'gimmick', documents: state.documents, products: [{ name: g.name, product_code: g.product_code, quantity: g.sets_qty, qty_per_set: null, is_group_main: true, price: g.set_price, total_price, uom_code: g.uom_code, tax_code: g.tax_code, include_ppn: g.include_ppn || false, is_production: false, description: g.description || '' }] };
+        });
+        const products_group = state.bundle_groups.map((g, i) => {
+            const comps = g.components.filter(c => c.name && c.name.trim() !== '').map(c => { const qty = parseFloat(c.quantity) || Math.round(parseFloat(c.qty_per_set||0) * parseFloat(g.sets_qty||0) * 100)/100; const pw = calculatePriceWithTax(parseFloat(c.price), c.tax_code, c.include_ppn); const total_price = Math.round(qty * pw * 100)/100; return { name: c.name, product_code: c.product_code, quantity: qty, qty_per_set: c.qty_per_set, is_group_main: false, price: c.price, total_price, uom_code: c.uom_code, tax_code: c.tax_code, include_ppn: c.include_ppn || false, is_production: c.is_production !== undefined ? c.is_production : true, description: c.description || '' }; });
+            const total_price = Math.round(comps.reduce((a,b)=>a+(b.total_price||0),0)*100)/100; return { title: g.name, job_number: state.job_number + "-A" + (i+1), client_po_date: state.client_po_date, client_po_number: 'BUNDLE-' + String(i+1).padStart(3,'0'), client_company: state.client_company, client_pic_name: state.client_pic_name, total_price, project_type: 'gimmick', documents: state.documents, products: comps };
+        });
+        let data = { title: state.title, total_price: bundleCalculatedTotal.value, job_number: state.job_number, client_po_date: state.client_po_date, pic_name: state.pic_name, client_po_number: state.client_po_number, client_company: state.client_company, client_code: state.client_code, client_pic_name: state.client_pic_name, ppn_type: state.ppn_type, status: state.status, po_deposits, products_group, is_po_deposit: true, is_bundle: true, documents: state.documents };
+        if (state.id === null) { createPodeposit(data).then(r=>{ loading(false); if(r.code===200) alertShowSuccess.value=true; else {state.errors=r.errors; alertShowFailed.value=true;}}); } else { updatePodeposit(state.id, data).then(r=>{ loading(false); if(r.code===200) alertShowSuccess.value=true; else {state.errors=r.errors; alertShowFailed.value=true;}}); }
+        return;
+    }
     // Validate products before submitting
     const validateProducts = () => {
         // Reset errors before validation
@@ -492,6 +626,31 @@ onMounted(() => {
                     );
                 } else {
                     state.closed_at = null;
+                }
+                if (data.is_bundle) {
+                    state.is_bundle_mode = true;
+                    const deposits = data.projects_data.filter(e => !e.is_real);
+                    const actuals = data.projects_data.filter(e => e.is_real);
+                    const map = new Map();
+                    deposits.forEach(d => {
+                        const main = (d.products_data && d.products_data[0]) || {};
+                        map.set(d.client_po_number, { name: main.name || d.title || '', product_code: main.product_code || '', sets_qty: main.quantity || '', set_price: main.price || '', uom_code: main.uom_code || null, tax_code: main.tax_code || null, include_ppn: main.include_ppn || false, description: main.description || '', components: [] });
+                    });
+                    actuals.forEach(a => {
+                        const key = a.client_po_number;
+                        const entry = map.get(key);
+                        if (!entry) return;
+                        (a.products_data || []).forEach(p => {
+                            entry.components.push({ name: p.name || '', product_code: p.product_code || '', qty_per_set: p.qty_per_set ?? '', quantity: p.quantity || '', uom_code: p.uom_code || null, tax_code: p.tax_code || null, include_ppn: p.include_ppn || false, is_production: p.is_production !== undefined ? (p.is_production==1 || p.is_production===true) : true, price: p.price || '', total_price: p.total_price || 0, description: p.description || '' });
+                        });
+                    });
+                    state.bundle_groups = Array.from(map.values());
+                    if (state.bundle_groups.length === 0) state.bundle_groups = [{ name: '', product_code: '', sets_qty: '', set_price: '', uom_code: null, tax_code: null, include_ppn: false, description: '', components: [{ name: '', product_code: '', qty_per_set: '', quantity: '', uom_code: null, tax_code: null, include_ppn: false, is_production: true, price: '', description: '' }] }];
+                    const firstDoc = deposits[0] || actuals[0];
+                    try { state.documents = JSON.parse(firstDoc.documents); } catch(e) { state.documents = {do:false,bast:false,gr:false}; }
+                    generateProds();
+                    console.log(state.bundle_groups);
+                    return;
                 }
                 const projects = data.projects_data.map((e) => {
                     // Initialize products with price and total_price properties if they don't exist
@@ -960,7 +1119,14 @@ async function loadUomAndTaxData() {
                     </label>
                 </div>
             </div>
-            <div>
+            <div style="margin-top:16px;padding:12px;border:1px solid #e2e8f0;background:#f8fafc;border-radius:10px;display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+                <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
+                    <input type="checkbox" :checked="state.is_bundle_mode" @change="state.is_bundle_mode = $event.target.checked" style="width:18px;height:18px;accent-color:#ef4444">
+                    <b style="font-size:13px">Mode Bundle/Set</b>
+                </label>
+                <span class="text-xs" :style="{background: state.is_bundle_mode ? '#fef3c7' : '#e5e7eb', padding: '2px 8px', borderRadius: '9999px'}">{{ state.is_bundle_mode ? 'ON — Bundle' : 'OFF — Normal' }}</span>
+            </div>
+            <div v-if="!state.is_bundle_mode">
                 <!-- <div class="flex justify-between">
                     <strong class="block mb-4 text-lg text-left"
                         >Products</strong
@@ -2318,6 +2484,102 @@ async function loadUomAndTaxData() {
                     </label>
                     <span></span>
                 </div> -->
+                </div>
+            <div v-if="state.is_bundle_mode">
+                <div v-for="(bundle, bi) in state.bundle_groups" :key="bi" class="border rounded-lg mb-4" style="overflow:hidden">
+                    <div class="flex items-center justify-between px-4 py-3 bg-gray-50 border-b" style="gap:12px;flex-wrap:wrap">
+                        <div class="flex items-center gap-2" style="flex-wrap:wrap">
+                            <span class="text-xs" style="background:#fef3c7;color:#92400e;border:1px solid #fde68a;padding:2px 8px;border-radius:9999px">Bundle {{ bi+1 }}</span>
+                            <b class="text-sm">{{ bundle.name || 'Nama Paket' }}</b>
+                            <span class="text-xs" style="background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;padding:2px 8px;border-radius:9999px">{{ bundle.components.length }} item</span>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="text-xs text-gray-500">Paket: <b style="color:#111827">Rp {{ bundle.sets_qty && bundle.set_price ? nom(Math.round(parseFloat(bundle.sets_qty||0)*calculatePriceWithTax(parseFloat(bundle.set_price), bundle.tax_code, bundle.include_ppn)*100)/100) : '0' }}</b></span>
+                            <button type="button" class="text-xl px-2 h-40px text-[#667085] hover:bg-gray-100 rounded" @click="setBundleDelete(bi)"><i class="ri-delete-bin-line"></i></button>
+                        </div>
+                    </div>
+                    <div class="p-4">
+                        <div class="flex items-center gap-2 mb-2"><span class="text-xs" style="background:#fee2e2;color:#991b1b;border:1px solid #fecaca;padding:2px 8px;border-radius:9999px">Paket / Bundle</span></div>
+                        <div class="border rounded-lg" style="overflow:hidden">
+                            <table class="w-full rounded-lg" style="overflow:visible">
+                                <thead class="bg-gray-100">
+                                    <tr class="border-b">
+                                        <th class="text-left text-sm px-4 py-2" style="width:16%">Product Code</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:18%">Nama Paket</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:110px">Qty (Set)</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:110px">UOM</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:110px">Tax</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:90px;text-align:center">Incl. PPN</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:120px">Price / Set</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:120px">Subtotal</th>
+                                        <th class="text-left text-sm px-4 py-2">Deskripsi</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b">
+                                        <td><div class="flex flex-col gap-1"><SelectProduct @select="(e)=>onBundleProductSelect(bundle,e)" :value="bundle.product_code" :ppnType="state.ppn_type" /><span class="text-xs text-red-500 pl-4" v-if="state.errors[`bundle_groups.${bi}.product_code`]">{{ state.errors[`bundle_groups.${bi}.product_code`][0] }}</span></div></td>
+                                        <td><div class="flex flex-col gap-1"><input type="text" class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none" placeholder="Nama Paket" v-model="bundle.name" /><span class="text-xs text-red-500 pl-4" v-if="state.errors[`bundle_groups.${bi}.name`]">{{ state.errors[`bundle_groups.${bi}.name`][0] }}</span></div></td>
+                                        <td><div class="flex flex-col gap-1"><INumber class="w-full h-40px pl-4 pr-1 text-sm bg-transparent" placeholder="0" v-model="bundle.sets_qty" /><span class="text-xs text-red-500 pl-4" v-if="state.errors[`bundle_groups.${bi}.sets_qty`]">{{ state.errors[`bundle_groups.${bi}.sets_qty`][0] }}</span></div></td>
+                                        <td><div class="flex flex-col gap-1"><select class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none" v-model="bundle.uom_code"><option value="">Select UOM</option><option v-for="uom in uoms" :key="uom.id" :value="uom.code">{{ uom.name }}</option></select><span class="text-xs text-red-500 pl-4" v-if="state.errors[`bundle_groups.${bi}.uom_code`]">{{ state.errors[`bundle_groups.${bi}.uom_code`][0] }}</span></div></td>
+                                        <td><div class="flex flex-col gap-1"><select class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none" v-model="bundle.tax_code"><option value="">Select Tax</option><option v-for="tax in taxes" :key="tax.id" :value="tax.code">{{ tax.name }}</option></select><span class="text-xs text-red-500 pl-4" v-if="state.errors[`bundle_groups.${bi}.tax_code`]">{{ state.errors[`bundle_groups.${bi}.tax_code`][0] }}</span></div></td>
+                                        <td class="text-center"><label class="flex flex-col items-center gap-1 cursor-pointer"><input type="checkbox" v-model="bundle.include_ppn" class="w-4 h-4 accent-red-500 cursor-pointer" /><span class="text-xs" :class="bundle.include_ppn ? 'text-red-500 font-semibold' : 'text-gray-400'">{{ bundle.include_ppn ? 'Yes' : 'No' }}</span></label></td>
+                                        <td><div class="flex flex-col gap-1"><INumber class="w-full h-40px pl-4 pr-1 text-sm bg-transparent" placeholder="0" v-model="bundle.set_price" /><span class="text-xs text-red-500 pl-4" v-if="state.errors[`bundle_groups.${bi}.set_price`]">{{ state.errors[`bundle_groups.${bi}.set_price`][0] }}</span></div></td>
+                                        <td><div class="w-full h-40px pl-4 pr-1 text-sm bg-transparent flex items-center">{{ bundle.sets_qty && bundle.set_price ? nom(Math.round(parseFloat(bundle.sets_qty||0)*calculatePriceWithTax(parseFloat(bundle.set_price), bundle.tax_code, bundle.include_ppn)*100)/100) : '0' }}</div></td>
+                                        <td><textarea class="w-full h-full px-4 text-sm h-40px pt-10px bg-transparent" placeholder="Deskripsi" v-model="bundle.description"></textarea></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <div class="px-4 pb-4">
+                        <div class="flex items-center gap-2 mb-2" style="flex-wrap:wrap">
+                            <span class="text-xs" style="background:#dbeafe;color:#1e40af;border:1px solid #bfdbfe;padding:2px 8px;border-radius:9999px">Isi per Paket</span>
+                            <span class="text-xs text-gray-500" style="margin-left:auto">Subtotal Isi: <b style="color:#111827">Rp {{ nom(bundle.components.filter(c=>c.name&&c.name.trim()!=='').reduce((a,c)=>a+(c.quantity && c.price ? Math.round(parseFloat(c.quantity)*calculatePriceWithTax(parseFloat(c.price), c.tax_code, c.include_ppn)*100)/100 : 0),0)) }}</b></span>
+                        </div>
+                        <div class="border rounded-lg" style="overflow:hidden">
+                            <table class="w-full rounded-lg" style="overflow:visible">
+                                <thead class="bg-gray-100">
+                                    <tr class="border-b">
+                                        <th class="text-left text-sm px-4 py-2">Product Code</th>
+                                        <th class="text-left text-sm px-4 py-2">Nama Komponen</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:90px">Qty / Set</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:90px">Total Qty</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:110px">UOM</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:110px">Tax</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:80px;text-align:center">Incl PPN</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:80px;text-align:center">Prod.</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:110px">Price / Pcs</th>
+                                        <th class="text-left text-sm px-4 py-2" style="width:110px">Subtotal</th>
+                                        <th class="text-left text-sm px-4 py-2">Deskripsi</th>
+                                        <th style="width:60px"></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr class="border-b" v-for="(comp, ci) in bundle.components" :key="ci">
+                                        <td><div class="flex flex-col gap-1"><SelectProduct @select="(e)=>onBundleComponentSelect(comp,e)" :value="comp.product_code" :ppnType="state.ppn_type" /><span class="text-xs text-red-500 pl-4" v-if="state.errors[`bundle_groups.${bi}.components.${ci}.product_code`]">{{ state.errors[`bundle_groups.${bi}.components.${ci}.product_code`][0] }}</span></div></td>
+                                        <td><div class="flex flex-col gap-1"><input type="text" class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none" placeholder="Nama" v-model="comp.name" /><span class="text-xs text-red-500 pl-4" v-if="state.errors[`bundle_groups.${bi}.components.${ci}.name`]">{{ state.errors[`bundle_groups.${bi}.components.${ci}.name`][0] }}</span></div></td>
+                                        <td><div class="flex flex-col gap-1"><INumber class="w-full h-40px pl-4 pr-1 text-sm bg-transparent" placeholder="0" v-model="comp.qty_per_set" /><span class="text-xs text-red-500 pl-4" v-if="state.errors[`bundle_groups.${bi}.components.${ci}.qty_per_set`]">{{ state.errors[`bundle_groups.${bi}.components.${ci}.qty_per_set`][0] }}</span></div></td>
+                                        <td><div class="w-full h-40px pl-4 pr-1 text-sm bg-transparent flex items-center" style="background:#f9fafb">{{ comp.quantity || '0' }}</div></td>
+                                        <td><div class="flex flex-col gap-1"><select class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none" v-model="comp.uom_code"><option value="">Select UOM</option><option v-for="uom in uoms" :key="uom.id" :value="uom.code">{{ uom.name }}</option></select><span class="text-xs text-red-500 pl-4" v-if="state.errors[`bundle_groups.${bi}.components.${ci}.uom_code`]">{{ state.errors[`bundle_groups.${bi}.components.${ci}.uom_code`][0] }}</span></div></td>
+                                        <td><div class="flex flex-col gap-1"><select class="w-full h-40px pl-4 pr-1 text-sm bg-transparent border-none" v-model="comp.tax_code"><option value="">Select Tax</option><option v-for="tax in taxes" :key="tax.id" :value="tax.code">{{ tax.name }}</option></select><span class="text-xs text-red-500 pl-4" v-if="state.errors[`bundle_groups.${bi}.components.${ci}.tax_code`]">{{ state.errors[`bundle_groups.${bi}.components.${ci}.tax_code`][0] }}</span></div></td>
+                                        <td class="text-center"><label class="flex flex-col items-center gap-1 cursor-pointer"><input type="checkbox" v-model="comp.include_ppn" class="w-4 h-4 accent-red-500 cursor-pointer" /><span class="text-xs" :class="comp.include_ppn ? 'text-red-500 font-semibold' : 'text-gray-400'">{{ comp.include_ppn ? 'Yes' : 'No' }}</span></label></td>
+                                        <td class="text-center"><label class="flex flex-col items-center gap-1 cursor-pointer"><input type="checkbox" v-model="comp.is_production" class="w-4 h-4 accent-blue-500 cursor-pointer" /><span class="text-xs" :class="comp.is_production ? 'text-blue-500 font-semibold' : 'text-gray-400'">{{ comp.is_production ? 'Yes' : 'No' }}</span></label></td>
+                                        <td><div class="flex flex-col gap-1"><INumber class="w-full h-40px pl-4 pr-1 text-sm bg-transparent" placeholder="0" v-model="comp.price" /><span class="text-xs text-red-500 pl-4" v-if="state.errors[`bundle_groups.${bi}.components.${ci}.price`]">{{ state.errors[`bundle_groups.${bi}.components.${ci}.price`][0] }}</span></div></td>
+                                        <td><div class="w-full h-40px pl-4 pr-1 text-sm bg-transparent flex items-center">{{ comp.quantity && comp.price ? nom(Math.round(parseFloat(comp.quantity)*calculatePriceWithTax(parseFloat(comp.price), comp.tax_code, comp.include_ppn)*100)/100) : '0' }}</div></td>
+                                        <td><textarea class="w-full h-full px-4 text-sm h-40px pt-10px bg-transparent" placeholder="Deskripsi" v-model="comp.description"></textarea></td>
+                                        <td><button type="button" class="text-xl px-4 h-40px text-[#667085] hover:bg-gray-100 rounded" @click="setBundleDelete(bi, ci)"><i class="ri-delete-bin-line"></i></button></td>
+                                    </tr>
+                                </tbody>
+                                <tfoot><tr><td colspan="12"><button type="button" class="text-sm px-4 py-2 bg-blue-gray-200 text-blue-gray-600 hover:bg-blue-gray-300 items-center justify-center flex gap-4 w-full rounded-b-lg" @click="addBundleComponent(bi)"><i class="ri-add-box-line text-xl"></i><span>Add Component</span></button></td></tr></tfoot>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+                <div class="flex gap-2 mt-2" style="flex-wrap:wrap">
+                    <button type="button" class="text-sm px-4 py-2 bg-white border rounded-lg hover:bg-gray-50 flex items-center gap-2" @click="addBundleGroup()"><i class="ri-add-line"></i> Add Bundle</button>
+                </div>
+                <p class="text-xs text-red-500 mt-2" v-if="state.errors.bundle_groups">{{ state.errors.bundle_groups[0] }}</p>
+            </div>
 
                 <div class="flex justify-end gap-4 mt-8">
                     <button
@@ -2330,7 +2592,7 @@ async function loadUomAndTaxData() {
                     </button>
                     <button
                         class="h-45px px-4 border border-red-300 bg-red-500 rounded-lg gap-2 shadow text-white hover:shadow-sm hover:bg-red-600 flex items-center"
-                        v-if="state.is_po_deposit == false"
+                        v-if="state.is_po_deposit == false || state.is_bundle_mode"
                     >
                         <i class="ri-save-line text-xl"></i>
                         <strong>{{
@@ -2338,7 +2600,6 @@ async function loadUomAndTaxData() {
                         }}</strong>
                     </button>
                 </div>
-            </div>
         </form>
     </div>
 

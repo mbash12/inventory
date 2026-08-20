@@ -150,8 +150,9 @@ class PoDepositController extends Controller
 
             $products = [];
             foreach ($projectData['products'] as $productData) {
-                // Ensure quantity is set (default to 1 if not provided)
                 $productData['quantity'] = $productData['quantity'] ?? 1;
+                $productData['qty_per_set'] = $productData['qty_per_set'] ?? null;
+                $productData['is_group_main'] = $productData['is_group_main'] ?? false;
                 $product = new Product($productData);
                 $products[] = $product;
             }
@@ -222,8 +223,9 @@ class PoDepositController extends Controller
             $existingProducts = $project->products_data()->get();
 
             foreach ($projectData['products'] as $childData) {
-                // Ensure quantity is set (default to 1 if not provided)
                 $childData['quantity'] = $childData['quantity'] ?? 1;
+                $childData['qty_per_set'] = $childData['qty_per_set'] ?? null;
+                $childData['is_group_main'] = $childData['is_group_main'] ?? false;
                 if (isset($childData['id'])) {
                     $existingProduct = $existingProducts->where('id', $childData['id'])->first();
                     if ($existingProduct) {
@@ -250,10 +252,9 @@ class PoDepositController extends Controller
     {
         try {
             $query = PoDeposit::query();
-            // $query->with('projects_data','projects_data.products_data');
-            
-            // Only show PO deposits (not regular projects)
-            $query->where('is_po_deposit', true);
+            $query->where('is_po_deposit', true)->where(function ($q) {
+                $q->whereNull('is_bundle')->orWhere('is_bundle', false);
+            });
             
             // Filter by has_client_code
             if ($request->filled('has_client_code')) {
@@ -349,6 +350,7 @@ class PoDepositController extends Controller
                 }
             }
             
+            $isBundle = (bool) ($request->is_bundle ?? false);
             $podeposit = PoDeposit::create([
                 "job_number" => $request->job_number,
                 "client_po_date" => $request->client_po_date,
@@ -361,7 +363,8 @@ class PoDepositController extends Controller
                 "status" => 'open',
                 "purchase_ordres" => json_encode($purchase_orders),
                 "invoices" => null,
-                "is_po_deposit" => $request->is_po_deposit,
+                "is_po_deposit" => $isBundle ? true : $request->is_po_deposit,
+                "is_bundle" => $isBundle,
                 "closed_at" => null,
                 "budget" => $request->budget ?? null,
                 "expense" => $request->expense ?? null,
@@ -454,6 +457,7 @@ class PoDepositController extends Controller
                 }
             }
             $podeposit = PoDeposit::findOrFail($id);
+            $isBundle = $request->has('is_bundle') ? (bool) $request->is_bundle : (bool) $podeposit->is_bundle;
             $podeposit->update([
                 "job_number" => $request->job_number,
                 "client_po_date" => $request->client_po_date,
@@ -465,6 +469,8 @@ class PoDepositController extends Controller
                 "ppn_type" => $request->ppn_type ?? 'ppn',
                 "status" => $request->status,
                 "purchase_ordres" => json_encode($purchase_orders),
+                "is_bundle" => $isBundle,
+                "is_po_deposit" => $isBundle ? true : ($request->is_po_deposit ?? $podeposit->is_po_deposit),
                 "budget" => $request->budget,
                 "closed_at" => $request->closed_at,
                 "expense" => $request->expense,
