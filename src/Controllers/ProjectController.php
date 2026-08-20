@@ -245,13 +245,13 @@ class ProjectController extends Controller
             }
             if ($request->has('delivery')) {
                 $query->whereNot('status',  'cancel');
-                // $query->where(function ($query0) {
-                //     $query0->where('is_po_deposit', false)
-                //         ->orWhere(function ($query1) {
-                //             $query1->where('is_po_deposit', true)
-                //                 ->whereNotNull('sent_to_del_at');
-                //         });
-                // });
+                // Deposit projects (is_po_deposit && !is_real) are not physically shipped:
+                // they are the down-payment/Paket line. Only actual projects and
+                // non-deposit projects appear in the delivery list.
+                $query->where(function ($query0) {
+                    $query0->where('is_po_deposit', false)
+                        ->orWhere('is_real', 1);
+                });
             }
 
             $query->orderBy($request->input('order_by', 'id'), $request->input('sort', 'desc'));
