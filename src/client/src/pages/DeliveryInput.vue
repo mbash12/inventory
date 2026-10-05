@@ -464,7 +464,7 @@ const submit = () => {
                                                     e.product ===
                                                         item.product &&
                                                     e.warehouse === item.origin
-                                            ).quantity
+                                            )?.quantity ?? 0
                                         )
                                     }}</strong
                                 >

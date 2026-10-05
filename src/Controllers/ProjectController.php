@@ -16,6 +16,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Src\Models\Inventory;
 use Src\Models\Warehouse;
 use Src\Models\DeliveryItem;
+use Src\Models\StockInItem;
 use Src\Models\User;
 use Src\Models\Notification;
 use Src\Models\PoDeposit;
@@ -41,11 +42,19 @@ class ProjectController extends Controller
         }
         try {
             $project = Project::findOrFail($id);
+            // Project tanpa riwayat inventory/delivery memakai alur Stock In: stok tidak digenerate otomatis.
+            $stockIn = $project->stock_in_required
+                || (!Inventory::where('project', $project->id)->exists() && !\Src\Models\Delivery::where('project', $project->id)->exists());
             $project->update([
                 // "shipping_vendor" => $request->shipping_vendor,
                 "manufacture" => $request->manufacture,
                 "status" => 'ready',
+                "stock_in_required" => $stockIn,
             ]);
+            if ($stockIn) {
+                notify('Project Delivery Updated', 'Project #' . $project['job_number'] . ' Ready to Deliver', 'delivery', json_encode(["project" => $project]), "delivery");
+                return response()->json(['code' => 200]);
+            }
             $existingProducts = Product::where('project', $id)->get();
             $manufacture = (int) ($request->manufacture ?: ($project->manufacture ?? 1));
             $wh = Warehouse::find($manufacture);
@@ -470,7 +479,15 @@ class ProjectController extends Controller
 
         $result = $query->findOrFail($id)->toArray();
 
-        $result['products_data'] = array_map(function ($item) {
+        // Project alur Stock In: qty yang belum masuk Stock In (dan otomatis belum keluar) = belum masuk (awaiting_stock).
+        $stockIn = !empty($result['stock_in_required']);
+        $result['awaiting_stock'] = null;
+
+        $result['products_data'] = array_map(function ($item) use ($stockIn) {
+            if ($stockIn) {
+                $item['stock_in_received'] = (int) StockInItem::where('product', $item['id'])->whereNotNull('received_at')->sum('actual_quantity');
+                $item['awaiting_stock'] = max(0, (int) $item['quantity'] - $item['stock_in_received']);
+            }
             $item['delivered'] = (int) DeliveryItem::where('product', $item['id'])
                 ->whereNot('delivered_at', NULL)
                 ->where('destination', 2)
@@ -512,6 +529,10 @@ class ProjectController extends Controller
                 
             return $item;
         }, $result['products_data']);
+
+        if ($stockIn) {
+            $result['awaiting_stock'] = array_sum(array_column($result['products_data'], 'awaiting_stock'));
+        }
 
         return response()->json([
             'code' => 200,

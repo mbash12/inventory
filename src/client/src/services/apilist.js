@@ -1,4 +1,14 @@
 export const apilist = {
+    stockInOptions: { url: '/stock-ins/options', auth: true, method: 'GET' },
+    stockIns: { url: '/stock-ins', auth: true, method: 'GET' },
+    createStockIn: { url: '/stock-ins', auth: true, method: 'POST' },
+    updateStockIn: { url: '/stock-ins', auth: true, method: 'PUT' },
+    deleteStockIn: { url: '/stock-ins', auth: true, method: 'DELETE' },
+    manualItems: { url: '/manual-items', auth: true, method: 'GET' },
+    createManualItem: { url: '/manual-items', auth: true, method: 'POST' },
+    updateManualItem: { url: '/manual-items', auth: true, method: 'PUT' },
+    stockCard: { url: '/stock-card', auth: true, method: 'GET' },
+    stockCardDetail: { url: '/stock-card/detail', auth: true, method: 'GET' },
     login : {
         url:"/auth/login",
         auth:false,

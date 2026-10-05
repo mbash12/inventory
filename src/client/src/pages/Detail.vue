@@ -3,6 +3,7 @@ import { onMounted, reactive, ref, watch } from "vue";
 import dayjs from "dayjs";
 import Navbar from "../components/Navbar.vue";
 import {
+    currentUser,
     getProject,
     getShippingVendorList,
     getWarehouseList,
@@ -158,6 +159,22 @@ onMounted(() => {
                                         >/<span>{{ state.data?.total }}</span>
                                     </div>
                                 </div> -->
+                                <div
+                                    v-if="state.data?.awaiting_stock != null"
+                                    class="flex-1 flex flex-col items-start"
+                                >
+                                    <span class="text-xs text-blue-gray-500"
+                                        >Belum Masuk</span
+                                    >
+                                    <div class="text-black text-sm">
+                                        <strong>{{
+                                            nom(state.data.awaiting_stock)
+                                        }}</strong
+                                        >/<span>{{
+                                            nom(state.data?.total)
+                                        }}</span>
+                                    </div>
+                                </div>
                                 <div class="flex-1 flex flex-col items-start">
                                     <span class="text-xs text-blue-gray-500"
                                         >Stored</span
@@ -305,6 +322,13 @@ onMounted(() => {
                                     {{ nom(item.quantity) }}</span
                                 >
                             </div>
+                            <div
+                                v-if="item.awaiting_stock != null"
+                                class="text-xs mt-1 text-gray-500"
+                            >
+                                Belum masuk {{ nom(item.awaiting_stock) }} · Sudah masuk
+                                {{ nom(item.stock_in_received) }}
+                            </div>
                             <div class="text-xs mt-1 text-gray-500">
                                 {{ item.description }}
                             </div>
@@ -344,6 +368,14 @@ onMounted(() => {
                 >
                     <i class="ri-truck-line text-xl"></i>
                     <span class="text-sm mt-1"> Update Delivery Status </span>
+                </button>
+                <button
+                    v-if="state.data?.stock_in_required && ['admin', 'delivery'].includes(currentUser.user?.user?.position)"
+                    class="flex px-3 h-12 gap-2 items-center justify-center border border-app-500 text-app-500 rounded-full w-full mt-2"
+                    @click="router.push('/stock/ins/add?project_id=' + state.id)"
+                >
+                    <i class="ri-stack-line text-xl"></i>
+                    <span class="text-sm mt-1"> Stock In </span>
                 </button>
             </div>
         </div>

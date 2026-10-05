@@ -69,6 +69,7 @@ class DeliveryController extends Controller
             ]);
         }
         try {
+            $this->assertStockAvailable((int) $request->project, $request->delivery_items);
             $delivery_items = [];
             foreach ($request->delivery_items as $itemData) {
                 $item = new DeliveryItem($itemData);
@@ -94,7 +95,8 @@ class DeliveryController extends Controller
         } catch (\Throwable $th) {
             return response()->json([
                 'code' => 422,
-                'errors' => $th
+                'message' => $th instanceof \Illuminate\Validation\ValidationException ? collect($th->errors())->flatten()->first() : null,
+                'errors' => $th instanceof \Illuminate\Validation\ValidationException ? $th->errors() : $th
             ]);
         }
     }
@@ -145,6 +147,7 @@ class DeliveryController extends Controller
         try {
             DB::beginTransaction();
             $delivery = Delivery::findOrFail($id);
+            $stockIn = (bool) Project::find($delivery->project)?->stock_in_required;
             $existingItems = $delivery->delivery_items_data()->get();
             $alldelivery_items_dataDelivered = true;
             
@@ -159,6 +162,9 @@ class DeliveryController extends Controller
 
                         // Case: Marking as delivered
                         if (!$wasDelivered && $nowDelivered) {
+                            if ($stockIn) {
+                                $this->inventoryService->assertAvailable((int) $childData['product'], (int) $childData['origin'], $newQty);
+                            }
                             $this->inventoryService->transfer(
                                 (int) $delivery->project,
                                 (int) $childData['product'],
@@ -260,6 +266,7 @@ class DeliveryController extends Controller
             DB::rollBack();
             return response()->json([
                 'code' => 422,
+                'message' => $th instanceof \Illuminate\Validation\ValidationException ? collect($th->errors())->flatten()->first() : null,
                 'errors' => $th->getMessage()
             ]);
         }
@@ -301,6 +308,23 @@ class DeliveryController extends Controller
                 'code' => 422,
                 'errors' => $th->getMessage()
             ]);
+        }
+    }
+
+    /** Project alur Stock In: qty DO tidak boleh melebihi stok yang sudah diterima di gudang asal. */
+    private function assertStockAvailable(int $projectId, array $items): void
+    {
+        if (!Project::find($projectId)?->stock_in_required) {
+            return;
+        }
+        $requested = [];
+        foreach ($items as $item) {
+            $key = (int) $item['origin'] . ':' . (int) $item['product'];
+            $requested[$key] = ($requested[$key] ?? 0) + (int) $item['quantity'];
+        }
+        foreach ($requested as $key => $quantity) {
+            [$origin, $product] = array_map('intval', explode(':', $key));
+            $this->inventoryService->assertAvailable($product, $origin, $quantity);
         }
     }
 

@@ -12,6 +12,13 @@ import DeliveryInput from "../pages/DeliveryInput.vue";
 import Inventory from "../pages/Inventory.vue";
 import InventoryDetail from "../pages/InventoryDetail.vue";
 
+import StockCard from "../pages/StockCard.vue";
+import StockCardDetail from "../pages/StockCardDetail.vue";
+import StockIns from "../pages/StockIns.vue";
+import StockInInput from "../pages/StockInInput.vue";
+import StockInDetail from "../pages/StockInDetail.vue";
+import ManualItems from "../pages/ManualItems.vue";
+
 import Page from "../pages/Page.vue";
 import Projects from "../pages/Projects.vue";
 import Project from "../pages/Project.vue";
@@ -66,6 +73,12 @@ import MktProjectSync from "../desktop/MktProjectSync.vue";
 
 import { reactive } from "vue";
 import { checkLoggedin, isLoggedin } from "./service";
+import MktStockCard from "../desktop/MktStockCard.vue";
+import MktStockCardDetail from "../desktop/MktStockCardDetail.vue";
+import MktStockIns from "../desktop/MktStockIns.vue";
+import MktStockInInput from "../desktop/MktStockInInput.vue";
+import MktStockInDetail from "../desktop/MktStockInDetail.vue";
+import MktManualItems from "../desktop/MktManualItems.vue";
 import MktNewSummary from "../desktop/MktNewSummary.vue";
 import MktFinances from "../desktop/MktFinances.vue";
 export const store = reactive({
@@ -356,6 +369,69 @@ const mainRoutes = {
             },
         },
         {
+            path: "/stock",
+            component: StockCard,
+            name: "Stock Card",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "marketing", "finance", "delivery"],
+            },
+        },
+        {
+            path: "/stock/detail",
+            component: StockCardDetail,
+            name: "Stock Card Detail",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "marketing", "finance", "delivery"],
+            },
+        },
+        {
+            path: "/stock/ins",
+            component: StockIns,
+            name: "Stock Documents",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "marketing", "finance", "delivery"],
+            },
+        },
+        {
+            path: "/stock/ins/add",
+            component: StockInInput,
+            name: "Stock Document Add",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "delivery"],
+            },
+        },
+        {
+            path: "/stock/ins/:id/edit",
+            component: StockInInput,
+            name: "Stock Document Edit",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "delivery"],
+            },
+        },
+        {
+            path: "/stock/ins/:id",
+            component: StockInDetail,
+            name: "Stock Document Detail",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "marketing", "finance", "delivery"],
+            },
+        },
+        {
+            path: "/stock/items",
+            component: ManualItems,
+            name: "Manual Items",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "marketing", "finance", "delivery"],
+            },
+        },
+        {
             path: "/inventory/:id",
             component: Inventory,
             name: "Inventory",
@@ -496,6 +572,69 @@ const desktopRoutes = {
             meta: {
                 requiresAuth: true,
                 roles: ["admin", "marketing", "finance", "delivery"],
+            },
+        },
+        {
+            path: "stock",
+            component: MktStockCard,
+            name: "Desktop Stock Card",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "marketing", "finance", "delivery"],
+            },
+        },
+        {
+            path: "stock/detail",
+            component: MktStockCardDetail,
+            name: "Desktop Stock Card Detail",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "marketing", "finance", "delivery"],
+            },
+        },
+        {
+            path: "stock/ins",
+            component: MktStockIns,
+            name: "Desktop Stock Documents",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "marketing", "finance", "delivery"],
+            },
+        },
+        {
+            path: "stock/ins/add",
+            component: MktStockInInput,
+            name: "Desktop Stock Document Add",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "delivery"],
+            },
+        },
+        {
+            path: "stock/ins/:id/edit",
+            component: MktStockInInput,
+            name: "Desktop Stock Document Edit",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "delivery"],
+            },
+        },
+        {
+            path: "stock/ins/:id",
+            component: MktStockInDetail,
+            name: "Desktop Stock Document Detail",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "marketing", "finance", "delivery"],
+            },
+        },
+        {
+            path: "stock/items",
+            component: MktManualItems,
+            name: "Desktop Manual Items",
+            meta: {
+                requiresAuth: true,
+                roles: ["admin", "delivery"],
             },
         },
         {

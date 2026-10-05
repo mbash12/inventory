@@ -134,7 +134,7 @@ const submit = () => {
         if (r.code === 200) {
             alertShowSuccess.value = true;
         } else {
-            alertShowError.value = true;
+            alertShowError.value = r.message || true;
         }
         loading(false);
     });

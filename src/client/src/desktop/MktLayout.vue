@@ -242,6 +242,13 @@ const menus = [
         roles: ["marketing", "admin", "finance", "delivery"],
     },
     {
+        icon: "ri-stack-fill",
+        title: "Stock Card",
+        activeon: "desktopstock",
+        link: "/desktop/stock",
+        roles: ["marketing", "admin", "finance", "delivery"],
+    },
+    {
         icon: "ri-hotel-fill",
         title: "Inventory",
         activeon: "desktopinventory",

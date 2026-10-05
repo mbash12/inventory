@@ -3,10 +3,12 @@
 namespace Src\Services;
 
 use Src\Models\DeliveryItem;
+use Src\Models\StockInItem;
 use Src\Models\Inventory;
 use Src\Models\Product;
 use Src\Models\Project;
 use Src\Models\Warehouse;
+use Illuminate\Validation\ValidationException;
 
 class InventoryService
 {
@@ -60,12 +62,13 @@ class InventoryService
 
         $manufactureId = (int) ($project->manufacture ?? 1);
         $manufactureWarehouse = Warehouse::find($manufactureId);
+        $stockIn = (bool) $project->stock_in_required;
 
         foreach ($project->products_data as $product) {
-            $warehouseIds = $this->warehouseIdsForProduct($product->id, $manufactureId, $existingInventories);
+            $warehouseIds = $this->warehouseIdsForProduct($product->id, $manufactureId, $existingInventories, $stockIn);
 
             foreach ($warehouseIds as $warehouseId) {
-                $base = $warehouseId === $manufactureId ? (int) $product->quantity : 0;
+                $base = $stockIn ? $this->receivedQuantity($product->id, $warehouseId) : ($warehouseId === $manufactureId ? (int) $product->quantity : 0);
                 $inbound = (int) DeliveryItem::where('product', $product->id)
                     ->where('destination', $warehouseId)
                     ->whereNotNull('delivered_at')
@@ -87,7 +90,27 @@ class InventoryService
         }
     }
 
-    private function adjust(int $projectId, int $productId, int $warehouseId, int $delta): void
+    public function available(int $productId, int $warehouseId): int
+    {
+        return (int) Inventory::where('warehouse', $warehouseId)->where('product', $productId)->sum('quantity');
+    }
+
+    /**
+     * For projects on the Stock In flow, goods must be received before they can be shipped.
+     */
+    public function assertAvailable(int $productId, int $warehouseId, int $quantity, string $hint = ' Buat Stock In terlebih dahulu.'): void
+    {
+        $available = $this->available($productId, $warehouseId);
+        if ($quantity > $available) {
+            $product = Product::find($productId);
+            $warehouse = Warehouse::find($warehouseId);
+            throw ValidationException::withMessages([
+                'stock' => 'Stok ' . ($product?->name ?? 'produk') . ' di ' . ($warehouse?->name ?? 'gudang asal') . ' hanya ' . $available . ', kurang dari ' . $quantity . '.' . $hint,
+            ]);
+        }
+    }
+
+    public function adjust(int $projectId, int $productId, int $warehouseId, int $delta): void
     {
         $inventory = Inventory::where('project', $projectId)
             ->where('warehouse', $warehouseId)
@@ -126,11 +149,31 @@ class InventoryService
         ]);
     }
 
-    private function warehouseIdsForProduct(int $productId, int $manufactureId, $existingInventories): array
+    private function receivedQuantity(int $productId, int $warehouseId): int
+    {
+        $received = (int) StockInItem::where('product', $productId)
+            ->whereNotNull('received_at')
+            ->whereHas('stock_in_data', fn ($query) => $query->where('warehouse', $warehouseId))
+            ->sum('actual_quantity');
+        $sentOut = (int) StockInItem::where('product', $productId)
+            ->whereNotNull('received_at')
+            ->whereHas('stock_in_data', fn ($query) => $query->where('direction', 'in')->where('origin', $warehouseId))
+            ->sum('actual_quantity');
+        return $received - $sentOut;
+    }
+
+    private function warehouseIdsForProduct(int $productId, int $manufactureId, $existingInventories, bool $stockIn = false): array
     {
         $ids = $existingInventories->where('product', $productId)->pluck('warehouse')->all();
-        $ids[] = $manufactureId;
+        if (!$stockIn) {
+            $ids[] = $manufactureId;
+        }
         $ids[] = 2;
+
+        foreach (StockInItem::where('product', $productId)->with('stock_in_data:id,origin,warehouse')->get() as $item) {
+            $ids[] = (int) $item->stock_in_data?->origin;
+            $ids[] = (int) $item->stock_in_data?->warehouse;
+        }
 
         $fromDeliveries = DeliveryItem::where('product', $productId)
             ->whereNotNull('delivered_at')
@@ -141,7 +184,7 @@ class InventoryService
             $ids[] = (int) $item->destination;
         }
 
-        return array_values(array_unique(array_map('intval', $ids)));
+        return array_values(array_filter(array_unique(array_map('intval', $ids))));
     }
 
     private function upsertInventoryRow(

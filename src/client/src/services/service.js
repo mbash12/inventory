@@ -34,7 +34,7 @@ export const nom = (num = "0", decimals = 2) => {
     const formattedInt = intPart.replace(/(\d)(?=(\d{3})+(?!\d))/g, "$1.");
     
     // Return with comma as decimal separator (Indonesian format)
-    return `${formattedInt},${decPart}`;
+    return decPart === undefined ? formattedInt : `${formattedInt},${decPart}`;
 }
 import router from "./router"
 export const goto = (link) => {
@@ -47,7 +47,7 @@ export const api = async (key, options = {}) => {
     const {method = 'GET', auth = false, url} = apilist[key];
     const {route = "", body, params, file} = options;
     
-    let headers = {};
+    let headers = { Accept: 'application/json' };
     let formData;
 
     if (file) {
@@ -128,6 +128,21 @@ export const setToken = async (data) => await api("setToken", {body: data});
 export const getWarhouseList = async (filters) => await api("getWarhouseList", { params: filters });
 export const getInventoryList = async (filters) => await api("getInventoryList", { params: filters });
 export const getInventoriess = async (id) => await api("getInventoriess", { route: "/" + id });
+export const stockError = (result) => Object.values(result?.errors ?? {}).flat().join(' ') || result?.message || 'Transaksi gagal. Silakan coba lagi.';
+const stockApi = async (key, options = {}) => {
+    const result = await api(key, options);
+    if (result?.code !== 200) throw new Error(stockError(result));
+    return result;
+};
+export const getStockInOptions = (params) => stockApi('stockInOptions', { params });
+export const getStockIns = (params) => stockApi('stockIns', { params });
+export const getStockIn = (id) => stockApi('stockIns', { route: '/' + id });
+export const saveStockIn = (id, body) => stockApi(id ? 'updateStockIn' : 'createStockIn', { route: id ? '/' + id : '', body });
+export const deleteStockIn = (id) => stockApi('deleteStockIn', { route: '/' + id });
+export const getManualItems = (params) => stockApi('manualItems', { params });
+export const saveManualItem = (id, body) => stockApi(id ? 'updateManualItem' : 'createManualItem', { route: id ? '/' + id : '', body });
+export const getStockCards = (params) => stockApi('stockCard', { params });
+export const getStockCardDetail = (params) => stockApi('stockCardDetail', { params });
 export const getClientList = async (filters) => await api("getClientList", { params: filters });
 export const getClient = async (id) => await api("getClient", { route: "/" + id });
 export const createClient = async (data) => await api("createClient", { body: data });

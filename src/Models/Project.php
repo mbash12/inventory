@@ -17,6 +17,7 @@ class Project extends Model
     use HasFactory;
 
     protected $fillable = [
+        'stock_in_required',
         'title',
         'job_number',
         'client_po_date',
@@ -58,6 +59,7 @@ class Project extends Model
 
     protected $casts = [
         'id' => 'integer',
+        'stock_in_required' => 'boolean',
         'client_po_date' => 'date',
         'is_po_deposit' => 'boolean',
         'planned_action' => 'boolean',

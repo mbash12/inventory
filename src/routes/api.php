@@ -9,6 +9,7 @@ use Src\Controllers\ShippingVendorController;
 use Src\Controllers\NotificationController;
 use Src\Controllers\ProjectController;
 use Src\Controllers\DeliveryController;
+use Src\Controllers\StockInController;
 use Src\Controllers\InitController;
 use Src\Controllers\ClientController;
 use Src\Controllers\InvoiceProgressController;
@@ -61,6 +62,19 @@ Route::prefix('deliveries')->group(function () {
     Route::put('/{id}', [DeliveryController::class, 'update']);
     Route::delete('/{id}', [DeliveryController::class, 'destroy']);
 });
+Route::prefix('stock-ins')->group(function () {
+    Route::get('/options', [StockInController::class, 'options']);
+    Route::get('/', [StockInController::class, 'index']);
+    Route::post('/', [StockInController::class, 'store']);
+    Route::get('/{id}', [StockInController::class, 'show']);
+    Route::put('/{id}', [StockInController::class, 'update']);
+    Route::delete('/{id}', [StockInController::class, 'destroy']);
+});
+Route::get('manual-items', [StockInController::class, 'manualItems']);
+Route::post('manual-items', [StockInController::class, 'saveManualItem']);
+Route::put('manual-items/{id}', [StockInController::class, 'saveManualItem']);
+Route::get('stock-card', [StockInController::class, 'card']);
+Route::get('stock-card/detail', [StockInController::class, 'cardDetail']);
 Route::get('inventoriess/{id}', [DeliveryController::class, 'inventories']);
 Route::get('inventories', [DeliveryController::class, 'inventory']);
 Route::apiResource('clients', ClientController::class);

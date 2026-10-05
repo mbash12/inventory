@@ -257,25 +257,36 @@ const submit = (e) => {
                                     >by {{ item.client_company }}</span
                                 >
                             </div>
-                            <div
-                                class="rounded-full px-2 py-2px text-10px font-medium text-white capitalize"
-                                :class="
-                                    item?.status === 'delivered'
-                                        ? 'bg-[#6FD669]'
-                                        : item?.status === 'partial'
-                                        ? 'bg-[#4DC8E3]'
-                                        : item?.status === 'ready'
-                                        ? 'bg-[#E5C100]'
-                                        : item?.status === 'cancel'
-                                        ? 'bg-[#E44545]'
-                                        : item?.status === 'production'
-                                        ? 'bg-[#3f51b5]'
-                                        : item?.status === 'new'
-                                        ? 'bg-[#AD58D4]'
-                                        : ''
-                                "
-                            >
-                                {{ item?.status }}
+                            <div class="flex flex-col items-end gap-1">
+                                <div
+                                    class="rounded-full px-2 py-2px text-10px font-medium text-white capitalize"
+                                    :class="
+                                        item?.status === 'delivered'
+                                            ? 'bg-[#6FD669]'
+                                            : item?.status === 'partial'
+                                            ? 'bg-[#4DC8E3]'
+                                            : item?.status === 'ready'
+                                            ? 'bg-[#E5C100]'
+                                            : item?.status === 'cancel'
+                                            ? 'bg-[#E44545]'
+                                            : item?.status === 'production'
+                                            ? 'bg-[#3f51b5]'
+                                            : item?.status === 'new'
+                                            ? 'bg-[#AD58D4]'
+                                            : ''
+                                    "
+                                >
+                                    {{ item?.status }}
+                                </div>
+                                <div
+                                    v-if="
+                                        item?.stock_in_required &&
+                                        !Number(item?.stored)
+                                    "
+                                    class="rounded-full px-2 py-2px text-10px font-medium text-[#B54708] bg-[#FEF0C7] whitespace-nowrap"
+                                >
+                                    Belum Stock In
+                                </div>
                             </div>
                         </div>
                         <div class="border-b w-full mt-2"></div>
