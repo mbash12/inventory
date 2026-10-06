@@ -133,6 +133,9 @@ step(1, "Saldo per barang & gudang", "Daftar menampilkan saldo tiap barang di ti
 step(2, "Riwayat (ledger) barang", "Ketuk salah satu baris untuk melihat riwayat: tanggal, dokumen, jumlah masuk, "
      "keluar, dan saldo. Isi Dari/Sampai lalu ketuk ikon cari untuk membatasi periode; saldo awal dan akhir periode "
      "ikut dihitung.", "11-ledger.png")
+para("Project lama (alur stok sebelumnya) juga tampil di Stock Card, hanya untuk dilihat, dengan label \"Alur lama\". "
+     "Riwayatnya diawali baris Saldo Awal (jumlah order di gudang manufacture) lalu mutasi dari delivery. "
+     "Saldo nol pada project lama disembunyikan. Transaksi stok untuk project lama tetap lewat delivery seperti biasa.")
 
 # ---------------- 3. Stock In project ----------------
 new_page()
@@ -152,6 +155,13 @@ step(4, "Stok langsung masuk", "Setelah Simpan, dokumen tercatat dan stok gudang
 step(5, "Belum Masuk dan Stored diperbarui", "Kembali ke detail project: Stored bertambah sesuai yang sudah dicatat, "
      "dan Belum Masuk menunjukkan sisa yang masih ditunggu (7 dari 10).", "09-project-after.png",
      "Saat sisa barang datang, buat Stock In baru untuk sisa tersebut.")
+step(6, "Stock In dari gudang lain (transfer)", "Jika barang dipindahkan dari gudang lain, pilih Asal pada form. "
+     "Dokumen menjadi transfer: stok di gudang asal berkurang dan stok gudang penerima bertambah. Daftar barang "
+     "menampilkan stok di asal (contoh: stok asal 6) dan qty tidak boleh melebihi stok itu.", "23-transfer-form.png",
+     "Asal harus gudang penyimpanan. Batas jumlah order project tidak berlaku untuk transfer.")
+step(7, "Riwayat transfer", "Di Stock Card gudang asal, transfer tampil sebagai Transfer Keluar (stok berkurang). "
+     "Di gudang penerima tampil sebagai Stock In.", "24-transfer-ledger.png",
+     "Transfer tidak bisa diubah/dihapus jika stok di gudang penerima sudah terkirim.")
 
 # ---------------- 4. Manual ----------------
 new_page()
