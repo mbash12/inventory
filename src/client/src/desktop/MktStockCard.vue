@@ -90,7 +90,7 @@ onMounted(async () => {
                 <tbody class="text-13px">
                     <tr v-for="row in state.rows" :key="row.type + row.item_id + '-' + row.warehouse_id + '-' + row.project_id" class="border-b h-56px text-left">
                         <td class="p-3 pl-4">{{ row.name }}</td>
-                        <td class="p-3">{{ row.job_number ? "JOB " + row.job_number : "Manual / tanpa project" }}</td>
+                        <td class="p-3">{{ row.job_number ? "JOB " + row.job_number : "Manual / tanpa project" }}<span v-if="row.job_number && !row.stock_in_required" class="ml-1 text-xs text-amber-700 bg-amber-50 rounded px-1">Alur lama</span></td>
                         <td class="p-3">{{ row.warehouse_name }}</td>
                         <td class="p-3">{{ nom(row.quantity, 0) }} {{ row.unit }}</td>
                         <td class="p-3"><router-link :to="cardLink(row)" title="Stock Card"><div class="text-xl px-3 py-1 text-[#667085] hover:bg-gray-100 rounded"><i class="ri-file-list-2-line"></i></div></router-link></td>

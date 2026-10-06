@@ -71,7 +71,7 @@ onMounted(async () => {
                 <router-link v-for="item in state.rows" :key="item.type + item.item_id + '-' + item.warehouse_id + '-' + item.project_id" :to="cardLink(item)">
                     <div class="rounded-none bg-white border-b">
                         <div class="flex justify-between px-4 pt-2 items-center -mb-1">
-                            <span class="text-xs text-blue-gray-500 font-semibold h-6 flex items-center">{{ item.job_number ? '#JOB ' + item.job_number : 'Manual / tanpa project' }}</span>
+                            <span class="text-xs text-blue-gray-500 font-semibold h-6 flex items-center">{{ item.job_number ? '#JOB ' + item.job_number : 'Manual / tanpa project' }}<span v-if="item.job_number && !item.stock_in_required" class="ml-1 text-[10px] text-amber-700 bg-amber-50 rounded px-1">Alur lama</span></span>
                             <span class="text-xs text-app-500">Stock card</span>
                         </div>
                         <div class="flex gap-1 px-4 py-1 pt-0 pb-3 justify-start items-center">

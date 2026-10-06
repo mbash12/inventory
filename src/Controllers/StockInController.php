@@ -109,7 +109,7 @@ class StockInController extends Controller
         });
     }
 
-    /** Saldo per barang per gudang: produk project (alur Stock In) + barang manual. */
+    /** Saldo per barang per gudang: produk project (alur Stock In dan alur lama) + barang manual. */
     public function card(Request $request)
     {
         $request->validate([
@@ -119,13 +119,15 @@ class StockInController extends Controller
         $projects = DB::table('inventories')
             ->join('projects', 'projects.id', '=', 'inventories.project')
             ->join('warehouses', 'warehouses.id', '=', 'inventories.warehouse')
-            ->where('projects.stock_in_required', true)->where('warehouses.storage', true)
-            ->select(DB::raw("'product' as type"), 'inventories.product as item_id', 'inventories.product_name as name', DB::raw("'pcs' as unit"), 'projects.id as project_id', 'projects.job_number', 'warehouses.id as warehouse_id', 'warehouses.name as warehouse_name', 'inventories.quantity');
+            ->where('warehouses.storage', true)
+            // Project alur lama: sembunyikan saldo nol agar daftar tidak penuh riwayat kosong.
+            ->where(fn ($q) => $q->where('projects.stock_in_required', true)->orWhere('inventories.quantity', '!=', 0))
+            ->select(DB::raw("'product' as type"), 'inventories.product as item_id', 'inventories.product_name as name', DB::raw("'pcs' as unit"), 'projects.id as project_id', 'projects.job_number', 'warehouses.id as warehouse_id', 'warehouses.name as warehouse_name', 'inventories.quantity', 'projects.stock_in_required as stock_in_required');
         $manual = DB::table('manual_inventories')
             ->join('manual_items', 'manual_items.id', '=', 'manual_inventories.manual_item')
             ->join('warehouses', 'warehouses.id', '=', 'manual_inventories.warehouse')
             ->where('warehouses.storage', true)
-            ->select(DB::raw("'manual' as type"), 'manual_items.id as item_id', 'manual_items.name', 'manual_items.unit', DB::raw('NULL as project_id'), DB::raw('NULL as job_number'), 'warehouses.id as warehouse_id', 'warehouses.name as warehouse_name', 'manual_inventories.quantity');
+            ->select(DB::raw("'manual' as type"), 'manual_items.id as item_id', 'manual_items.name', 'manual_items.unit', DB::raw('NULL as project_id'), DB::raw('NULL as job_number'), 'warehouses.id as warehouse_id', 'warehouses.name as warehouse_name', 'manual_inventories.quantity', DB::raw('1 as stock_in_required'));
         $rows = match ($request->scope) {
             'project' => $projects,
             'manual' => $manual,
