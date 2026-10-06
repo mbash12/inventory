@@ -6,7 +6,7 @@ import { getStockCardDetail, nom } from '../services/service';
 import { loading } from '../services/router';
 
 const route = useRoute();
-const kindText = { stock_in: 'Stock In', stock_out: 'Stock Out', transfer_out: 'Transfer Keluar', delivery: 'Delivery' };
+const kindText = { stock_in: 'Stock In', opening: 'Saldo Awal', stock_out: 'Stock Out', transfer_out: 'Transfer Keluar', delivery: 'Delivery' };
 const state = reactive({ from: '', to: '', card: null, busy: false, error: '' });
 const load = async () => {
     state.error = '';

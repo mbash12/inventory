@@ -180,6 +180,16 @@ class StockInController extends Controller
                     'in' => (int) $item->destination === $warehouse ? $item->actual_quantity : 0, 'out' => (int) $item->origin === $warehouse ? $item->actual_quantity : 0, 'notes' => null,
                 ]);
             $movements = $movements->concat($deliveries);
+            // Project alur lama: stok awal = qty produk di gudang manufacture, tanpa dokumen Stock In.
+            $product = Product::find($data['product_id']);
+            $project = $product ? Project::find($product->project) : null;
+            if ($project && !$project->stock_in_required && (int) ($project->manufacture ?? 1) === $warehouse) {
+                $movements->push([
+                    'date' => ($product->created_at ?? now())->toDateString(), 'at' => '0000-00-00 00:00:00', 'kind' => 'opening',
+                    'number' => 'JOB ' . $project->job_number, 'stock_in_id' => null, 'delivery_id' => null,
+                    'in' => (int) $product->quantity, 'out' => 0, 'notes' => null,
+                ]);
+            }
         }
         $movements = $movements->sortBy('at')->values();
         $opening = $movements->filter(fn ($row) => !empty($data['from']) && $row['date'] < $data['from'])->sum(fn ($row) => $row['in'] - $row['out']);

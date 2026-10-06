@@ -7,7 +7,7 @@ import Table from "../components/Table.vue";
 
 const route = useRoute();
 const router = useRouter();
-const kindText = { stock_in: "Stock In", stock_out: "Stock Out", transfer_out: "Transfer Keluar", delivery: "Delivery" };
+const kindText = { stock_in: "Stock In", opening: "Saldo Awal", stock_out: "Stock Out", transfer_out: "Transfer Keluar", delivery: "Delivery" };
 const state = reactive({ from: "", to: "", card: null, error: "", export: null, export_mode: "print" });
 const load = async () => {
     state.error = "";
