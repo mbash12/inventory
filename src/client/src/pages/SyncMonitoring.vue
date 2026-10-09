@@ -47,6 +47,7 @@
             <option value="syncing">Syncing</option>
             <option value="success">Success</option>
             <option value="failed">Failed</option>
+            <option value="blocked">Blocked</option>
           </select>
           <input v-model="filter.search" @input="debounceSearch" placeholder="Search..." class="border rounded px-2 py-1 w-48 text-sm" />
         </div>
@@ -111,6 +112,15 @@
                 class="bg-orange-500 text-white px-2 py-1 rounded text-xs hover:bg-orange-600 disabled:opacity-50"
               >
                 {{ retrying[item.id] ? 'Syncing...' : 'Re-sync' }}
+              </button>
+              <button
+                v-if="item.sync_status === 'blocked' || item.sync_status === 'failed' || item.last_synced_at"
+                @click="retrySync(item.id, true)"
+                :disabled="retrying[item.id]"
+                title="Kirim ulang seluruh data PO, bukan hanya perubahan"
+                class="ml-1 bg-red-500 text-white px-2 py-1 rounded text-xs hover:bg-red-600 disabled:opacity-50"
+              >
+                Full resync
               </button>
               <button
                 v-if="item.sync_error"
@@ -345,10 +355,11 @@ export default {
         this.loading = false;
       }
     },
-    async retrySync(id) {
+    async retrySync(id, full = false) {
+      if (full && !confirm('Kirim ulang SELURUH data PO ini ke Accounting? Hanya field yang berbeda yang akan ditimpa, tetapi Accounting akan menolak jika qty di bawah yang sudah terkirim/ditagih.')) return;
       this.retrying[id] = true;
       try {
-        const data = await api('retrySyncPoDeposit', { route: `/${id}/retry` });
+        const data = await api('retrySyncPoDeposit', { route: `/${id}/retry`, body: full ? { full: true } : undefined });
         alert(data.message);
         await this.loadData();
       } catch (error) {
@@ -432,6 +443,7 @@ export default {
         syncing: 'bg-blue-100 text-blue-800',
         success: 'bg-green-100 text-green-800',
         failed: 'bg-red-100 text-red-800',
+        blocked: 'bg-orange-100 text-orange-800',
       };
       return classes[status] || 'bg-gray-100 text-gray-800';
     },

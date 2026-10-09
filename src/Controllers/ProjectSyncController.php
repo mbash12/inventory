@@ -54,7 +54,7 @@ class ProjectSyncController extends Controller
                     'last_synced_at' => $pd->last_synced_at,
                     'sync_error' => $pd->sync_error,
                     'sync_retry_count' => $pd->sync_retry_count,
-                    'can_retry' => in_array($pd->sync_status, ['failed', null]),
+                    'can_retry' => in_array($pd->sync_status, ['failed', 'blocked', null]),
                 ];
             }),
             'meta' => [
