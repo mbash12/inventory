@@ -6,6 +6,7 @@ use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 use Src\Jobs\ProjectSyncJob;
 use Src\Models\PoDeposit;
+use Src\Services\SyncRetryPolicy;
 
 class AutoSyncProjects extends Command
 {
@@ -22,7 +23,7 @@ class AutoSyncProjects extends Command
                 $q->whereNull('sync_status')
                   ->orWhere(function($q2) {
                       $q2->where('sync_status', 'failed')
-                         ->where('sync_retry_count', '<', 3);
+                         ->where('sync_retry_count', '<', SyncRetryPolicy::MAX_RETRIES);
                   });
             });
 
@@ -48,7 +49,11 @@ class AutoSyncProjects extends Command
             // If the requested company ID doesn't match known PPN types, fall back to default behavior (sync all)
         }
 
-        $poDeposits = $query->get();
+        // Failed POs wait out their backoff before being tried again.
+        $poDeposits = $query->get()->filter(
+            fn (PoDeposit $po) => $po->sync_status !== 'failed'
+                || SyncRetryPolicy::isDue((int) $po->sync_retry_count, $po->updated_at)
+        )->values();
 
         if ($poDeposits->isEmpty()) {
             $this->info('No PO Deposits to sync');
