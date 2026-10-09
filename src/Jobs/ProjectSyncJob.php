@@ -3,6 +3,7 @@
 namespace Src\Jobs;
 
 use Illuminate\Bus\Queueable;
+use Illuminate\Contracts\Queue\ShouldBeUniqueUntilProcessing;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
@@ -11,24 +12,39 @@ use Illuminate\Support\Facades\Log;
 use Src\Models\PoDeposit;
 use Src\Services\ProjectSyncService;
 
-class ProjectSyncJob implements ShouldQueue
+/**
+ * Unique until it starts running: a burst of edits to one PO queues a single
+ * job, while an edit made during a run queues one more so it is not lost.
+ */
+class ProjectSyncJob implements ShouldQueue, ShouldBeUniqueUntilProcessing
 {
     use Dispatchable, InteractsWithQueue, Queueable, SerializesModels;
 
     public $tries = 3;
     public $maxExceptions = 3;
 
+    /** Seconds the unique lock is kept if the job never starts. */
+    public $uniqueFor = 600;
+
     protected int $poDepositId;
     protected ?int $companyId;
     protected ?int $syncJobId;
+    protected bool $forceFull;
 
-    public function __construct(int $poDepositId, ?int $companyId = null, ?int $syncJobId = null)
+    public function __construct(int $poDepositId, ?int $companyId = null, ?int $syncJobId = null, bool $forceFull = false)
     {
+        $this->forceFull = $forceFull;
         $this->poDepositId = $poDepositId;
         $this->companyId = $companyId;
         $this->syncJobId = $syncJobId;
         // Use default queue or configure via env
-        $this->onQueue(env('PROJECT_SYNC_QUEUE', 'default'));
+        $this->onQueue(config('project_sync.queue', 'default'));
+    }
+
+    public function uniqueId(): string
+    {
+        // Manually requested runs carry their own SyncJob record and must not be swallowed.
+        return 'project-sync:' . $this->poDepositId . ($this->syncJobId ? ':' . $this->syncJobId : '') . ($this->forceFull ? ':full' : '');
     }
 
     public function handle(ProjectSyncService $syncService): void
@@ -71,7 +87,7 @@ class ProjectSyncJob implements ShouldQueue
             }
 
             // Perform sync
-            $result = $syncService->syncSinglePoDeposit($poDeposit, $companyId);
+            $result = $syncService->syncSinglePoDeposit($poDeposit, $companyId, $this->forceFull);
 
             // Update based on result
             if (empty($result['errors'])) {
@@ -97,6 +113,25 @@ class ProjectSyncJob implements ShouldQueue
                     'po_deposit_id' => $this->poDepositId,
                     'sync_job_id' => $this->syncJobId,
                     'synced_count' => count($result['synced'] ?? []),
+                ]);
+            } elseif (! empty($result['blocked'])) {
+                // Accounting refused on business grounds: retrying changes nothing.
+                $poDeposit->update([
+                    'sync_status' => 'blocked',
+                    'sync_error' => json_encode($result['errors']),
+                ]);
+
+                if ($this->syncJobId) {
+                    $syncJob = \Src\Models\SyncJob::find($this->syncJobId);
+                    if ($syncJob) {
+                        $syncJob->markAsFailed(json_encode($result['errors']));
+                    }
+                }
+
+                Log::warning('ProjectSyncJob blocked by Accounting', [
+                    'po_deposit_id' => $this->poDepositId,
+                    'sync_job_id' => $this->syncJobId,
+                    'errors' => $result['errors'],
                 ]);
             } else {
                 $poDeposit->update([

@@ -76,7 +76,7 @@ class ProjectSyncController extends Controller
         $query = PoDeposit::whereNotNull('client_code')
             ->where(function($q) {
                 $q->whereNull('sync_status')
-                  ->orWhere('sync_status', 'failed');
+                  ->orWhereIn('sync_status', ['failed', 'blocked']);
             });
 
         if ($search) {
@@ -135,7 +135,7 @@ class ProjectSyncController extends Controller
             ]);
 
             // Run immediately
-            $result = $this->syncService->syncSinglePoDeposit($poDeposit, $companyId);
+            $result = $this->syncService->syncSinglePoDeposit($poDeposit, $companyId, $request->boolean('full'));
 
             // Update based on result
             if (empty($result['errors'])) {
@@ -144,6 +144,11 @@ class ProjectSyncController extends Controller
                     'last_synced_at' => now(),
                     'sync_error' => null,
                     'sync_retry_count' => 0,
+                ]);
+            } elseif (!empty($result['blocked'])) {
+                $poDeposit->update([
+                    'sync_status' => 'blocked',
+                    'sync_error' => json_encode($result['errors']),
                 ]);
             } else {
                 $poDeposit->update([

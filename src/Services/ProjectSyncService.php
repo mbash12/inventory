@@ -4,14 +4,24 @@ namespace Src\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Http\Client\Response;
+use Src\Models\AccountingSyncSnapshot;
 use Src\Models\Project;
 use Src\Models\PoDeposit;
 
 class ProjectSyncService
 {
+    public const KEY_GROUPED = 'po';
+
     private $accountingApiUrl;
     private $bearerToken;
     private $ppnTypeCompanyIdMap;
+
+    /** Send complete payloads even when a snapshot exists (manual full resync). */
+    private bool $forceFull = false;
+
+    /** @var list<string> so_keys synced during the current PO run */
+    private array $touchedKeys = [];
 
     public function __construct()
     {
@@ -48,8 +58,10 @@ class ProjectSyncService
      * @param int|null $companyId Target company ID in accounting system
      * @return array Sync results
      */
-    public function syncSinglePoDeposit(PoDeposit $poDeposit, ?int $companyId = null): array
+    public function syncSinglePoDeposit(PoDeposit $poDeposit, ?int $companyId = null, bool $forceFull = false): array
     {
+        $this->forceFull = $forceFull;
+
         // Get company_id from ppn_type if not provided
         if ($companyId === null) {
             $ppnType = $poDeposit->ppn_type ?? 'ppn';
@@ -60,7 +72,8 @@ class ProjectSyncService
             'success' => true,
             'message' => '',
             'synced' => [],
-            'errors' => []
+            'errors' => [],
+            'blocked' => false,
         ];
 
         try {
@@ -73,6 +86,16 @@ class ProjectSyncService
                 $results['message'] = 'No projects to sync';
             }
 
+        } catch (AccountingSyncBlocked $e) {
+            $results['success'] = false;
+            $results['blocked'] = true;
+            $results['errors'][] = [
+                'po_deposit_id' => $poDeposit->id,
+                'job_number' => $poDeposit->job_number,
+                'error' => $e->getMessage(),
+                'reasons' => $e->reasons,
+            ];
+            $results['message'] = 'Sync blocked by Accounting: ' . $e->getMessage();
         } catch (\Exception $e) {
             $results['success'] = false;
             $results['errors'][] = [
@@ -158,6 +181,15 @@ class ProjectSyncService
      * Sync a single PO Deposit to Sales Order(s)
      */
     private function syncPoDeposit(PoDeposit $poDeposit, ?int $companyId): array
+    {
+        $this->touchedKeys = [];
+        $result = $this->buildAndSyncPoDeposit($poDeposit, $companyId);
+        $this->retireOrphanedOrders($poDeposit);
+
+        return $result;
+    }
+
+    private function buildAndSyncPoDeposit(PoDeposit $poDeposit, ?int $companyId): array
     {
         // Check if this is a deposit or non-deposit
         if ($poDeposit->is_po_deposit) {
@@ -258,6 +290,7 @@ class ProjectSyncService
             'company_id' => $companyId,
             'items' => $items,
             'is_grouped' => true,
+            'source_po_deposit_id' => $poDeposit->id,
             'project_count' => $projects->count(),
             'is_bundle' => (bool) ($poDeposit->is_bundle ?? false),
             'bundle_meta' => [
@@ -266,13 +299,13 @@ class ProjectSyncService
             ],
         ];
 
-        $response = $this->sendToAccounting($salesOrderData);
+        $response = $this->syncOrder($poDeposit, self::KEY_GROUPED, $salesOrderData);
 
         return [
             'type' => 'non-deposit',
             'po_deposit_id' => $poDeposit->id,
             'job_number' => $poDeposit->job_number,
-            'sales_order_number' => $response['order_number'] ?? $poDeposit->job_number,
+            'sales_order_number' => $response['data']['order_number'] ?? $response['order_number'] ?? $poDeposit->job_number,
             'project_ids' => $projects->pluck('id')->toArray(),
             'item_count' => count($items),
             'total_amount' => $salesOrderData['total_amount'],
@@ -366,7 +399,7 @@ class ProjectSyncService
                 ],
             ];
 
-            $response = $this->sendToAccounting($salesOrderData);
+            $response = $this->syncOrder($poDeposit, 'p' . $project->id, $salesOrderData);
 
             // Store the SO info for linking with actual projects
             $soInfo = [
@@ -472,7 +505,7 @@ class ProjectSyncService
                 'parent_deposit_project_id' => $parentDepositProjectId,
             ];
 
-            $response = $this->sendToAccounting($salesOrderData);
+            $response = $this->syncOrder($poDeposit, 'p' . $project->id, $salesOrderData);
 
             $syncedOrder = [
                 'sales_order_number' => $orderNumber,
@@ -598,45 +631,211 @@ class ProjectSyncService
     }
 
     /**
-     * Send Sales Order data to Accounting API
+     * Send one Sales Order to Accounting: as a delta against the last snapshot
+     * when possible, otherwise as a complete payload.
+     *
+     * @param  array<string, mixed>  $payload  complete payload (what a full sync sends)
+     * @return array<string, mixed> Accounting's decoded response
+     *
+     * @throws AccountingSyncBlocked when Accounting refuses the change on business grounds
      */
-    private function sendToAccounting(array $salesOrderData): array
+    private function syncOrder(PoDeposit $poDeposit, string $soKey, array $payload): array
+    {
+        $this->touchedKeys[] = $soKey;
+        $payload['source_po_deposit_id'] = $poDeposit->id;
+
+        $desired = SnapshotDiffer::stateFromPayload($payload);
+        $snapshot = AccountingSyncSnapshot::where('po_deposit_id', $poDeposit->id)->where('so_key', $soKey)->first();
+        $version = ($snapshot?->sync_version ?? 0) + 1;
+
+        if ($snapshot && ! $this->forceFull && (int) $snapshot->company_id === (int) $payload['company_id']) {
+            $delta = SnapshotDiffer::diff($snapshot->state, $desired);
+
+            if ($delta === null) {
+                Log::info('Sales Order unchanged since last sync, skipping', [
+                    'po_deposit_id' => $poDeposit->id,
+                    'so_key' => $soKey,
+                ]);
+
+                return ['data' => [
+                    'sales_order_id' => $snapshot->accounting_so_id,
+                    'order_number' => $snapshot->accounting_order_number,
+                    'mode' => 'update',
+                    'status' => 'unchanged',
+                ]];
+            }
+
+            $response = $this->post($this->deltaBody($payload, $snapshot, $delta, $version));
+
+            if ($response->successful() && ($response->json('data.status') !== 'stale')) {
+                return $this->remember($poDeposit, $soKey, $payload, $desired, $version, $response);
+            }
+
+            if ($response->successful()) {
+                // Accounting already holds a newer version than our snapshot knows about.
+                $version = max($version, (int) $response->json('data.sync_version') + 1);
+                Log::warning('Delta rejected as stale, falling back to full sync', ['po_deposit_id' => $poDeposit->id, 'so_key' => $soKey]);
+            } elseif ($response->status() === 404 || $this->needsFullSync($response)) {
+                Log::info('Delta not applicable, falling back to full sync', [
+                    'po_deposit_id' => $poDeposit->id,
+                    'so_key' => $soKey,
+                    'status' => $response->status(),
+                ]);
+            } else {
+                throw $this->failureFrom($response);
+            }
+        }
+
+        $payload['sync_version'] = $version;
+        $response = $this->post($payload);
+
+        if (! $response->successful()) {
+            throw $this->failureFrom($response);
+        }
+
+        return $this->remember($poDeposit, $soKey, $payload, $desired, $version, $response);
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array{header: array<string, mixed>, items: list<array<string, mixed>>}  $delta
+     * @return array<string, mixed>
+     */
+    private function deltaBody(array $payload, AccountingSyncSnapshot $snapshot, array $delta, int $version): array
+    {
+        return [
+            'mode' => 'delta',
+            'company_id' => $payload['company_id'],
+            'source_po_deposit_id' => $payload['source_po_deposit_id'],
+            'source_project_id' => $payload['source_project_id'] ?? null,
+            'lookup_job_number' => $snapshot->state['header']['job_number'] ?? null,
+            'sync_version' => $version,
+            'header' => $delta['header'],
+            'items' => $delta['items'],
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $payload
+     * @param  array<string, mixed>  $state
+     * @return array<string, mixed>
+     */
+    private function remember(PoDeposit $poDeposit, string $soKey, array $payload, array $state, int $version, Response $response): array
+    {
+        $json = $response->json() ?? ['status' => 'success'];
+
+        AccountingSyncSnapshot::updateOrCreate(
+            ['po_deposit_id' => $poDeposit->id, 'so_key' => $soKey],
+            [
+                'company_id' => $payload['company_id'],
+                'sync_version' => max($version, (int) ($json['data']['sync_version'] ?? 0)),
+                'accounting_so_id' => $json['data']['sales_order_id'] ?? null,
+                'accounting_order_number' => $json['data']['order_number'] ?? null,
+                'state' => $state,
+                'synced_at' => now(),
+            ],
+        );
+
+        Log::info('Sales Order synced successfully', [
+            'order_number' => $payload['order_number'],
+            'so_key' => $soKey,
+            'response' => $json,
+        ]);
+
+        return $json;
+    }
+
+    /**
+     * Orders this PO used to have that are no longer produced (project removed,
+     * set to non-real, or emptied): take their items out of Accounting. The
+     * Sales Order itself is never deleted.
+     */
+    private function retireOrphanedOrders(PoDeposit $poDeposit): void
+    {
+        $orphans = AccountingSyncSnapshot::where('po_deposit_id', $poDeposit->id)
+            ->whereNotIn('so_key', $this->touchedKeys ?: [''])
+            ->get();
+
+        foreach ($orphans as $snapshot) {
+            $ids = array_keys($snapshot->state['items'] ?? []);
+
+            if ($ids === []) {
+                continue;
+            }
+
+            $version = $snapshot->sync_version + 1;
+            $response = $this->post([
+                'mode' => 'delta',
+                'company_id' => $snapshot->company_id,
+                'source_po_deposit_id' => $poDeposit->id,
+                'source_project_id' => str_starts_with($snapshot->so_key, 'p') ? (int) substr($snapshot->so_key, 1) : null,
+                'lookup_job_number' => $snapshot->state['header']['job_number'] ?? null,
+                'sync_version' => $version,
+                'header' => [],
+                'items' => array_map(fn ($id) => ['op' => 'delete', 'source_product_id' => (int) $id], $ids),
+            ]);
+
+            if ($response->successful() || $response->status() === 404) {
+                $state = $snapshot->state;
+                $state['items'] = [];
+                $snapshot->update(['state' => $state, 'sync_version' => $version, 'synced_at' => now()]);
+                continue;
+            }
+
+            throw $this->failureFrom($response);
+        }
+    }
+
+    private function post(array $body): Response
     {
         $url = $this->accountingApiUrl . '/sales-orders/sync';
 
         Log::info('Sending Sales Order to Accounting', [
             'url' => $url,
-            'order_number' => $salesOrderData['order_number'],
-            'company_id' => $salesOrderData['company_id'] ?? 'NULL',
-            'client_po_number' => $salesOrderData['client_po_number'] ?? 'NULL',
-            'reference_no' => $salesOrderData['reference_no'] ?? 'NULL',
-            'full_data_keys' => array_keys($salesOrderData),
+            'mode' => $body['mode'] ?? 'full',
+            'order_number' => $body['order_number'] ?? null,
+            'company_id' => $body['company_id'] ?? 'NULL',
+            'source_po_deposit_id' => $body['source_po_deposit_id'] ?? null,
+            'source_project_id' => $body['source_project_id'] ?? null,
+            'sync_version' => $body['sync_version'] ?? null,
+            'item_ops' => isset($body['mode']) ? count($body['items'] ?? []) : null,
         ]);
 
         try {
-            $response = Http::withHeaders([
+            return Http::withHeaders([
                 'Authorization' => 'Bearer ' . $this->bearerToken,
                 'Accept' => 'application/json',
                 'Content-Type' => 'application/json',
-            ])->post($url, $salesOrderData);
-
-            if ($response->successful()) {
-                Log::info('Sales Order synced successfully', [
-                    'order_number' => $salesOrderData['order_number'],
-                    'response' => $response->json()
-                ]);
-                return $response->json() ?? ['status' => 'success'];
-            } else {
-                $errorMsg = 'Accounting API error: ' . $response->status() . ' - ' . $response->body();
-                Log::error($errorMsg);
-                throw new \Exception($errorMsg);
-            }
+            ])->post($url, $body);
         } catch (\Exception $e) {
-            Log::error('Failed to send to Accounting API', [
-                'error' => $e->getMessage()
-            ]);
+            Log::error('Failed to send to Accounting API', ['error' => $e->getMessage()]);
             throw $e;
         }
+    }
+
+    private function needsFullSync(Response $response): bool
+    {
+        if ($response->status() !== 422) {
+            return false;
+        }
+
+        return collect($response->json('reasons') ?? [])->contains(fn ($reason) => ($reason['code'] ?? null) === 'needs_full_sync');
+    }
+
+    private function failureFrom(Response $response): \Exception
+    {
+        $reasons = $response->json('reasons');
+
+        if (in_array($response->status(), [409, 422], true) && is_array($reasons) && $reasons !== []) {
+            $summary = collect($reasons)->map(fn ($r) => ($r['code'] ?? 'rejected') . (isset($r['detail']) ? ': ' . $r['detail'] : ''))->implode('; ');
+
+            return new AccountingSyncBlocked($response->status(), $summary, $reasons);
+        }
+
+        $message = 'Accounting API error: ' . $response->status() . ' - ' . $response->body();
+        Log::error($message);
+
+        return new \Exception($message);
     }
 
     /**
